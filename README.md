@@ -24,13 +24,6 @@ To run the tests:
 ./scripts/test.sh
 ```
 
-### Why it never expires
-
-The app is **ad-hoc signed** (`codesign -s -`). Unlike iOS free provisioning, an ad-hoc
-signature has no expiry, so there is nothing to renew after 7 days. Gatekeeper only
-challenges apps carrying a quarantine flag, which is attached at download — an app built
-locally never gets one. No Apple Developer account is needed, not even a free one.
-
 ## The screens
 
 | Screen | What it does |

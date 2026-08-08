@@ -1,6 +1,13 @@
 #!/usr/bin/env swift
 // Renders the app icon and packages it as AppIcon.icns.
-// The mark is a winged banknote on the app's marine accent.
+//
+// The mark is the 💸 glyph on the app's marine gradient. Earlier versions drew
+// a winged banknote from bezier paths; three attempts each failed a different
+// way — horns, a blade, then a curled ribbon — so this draws the system glyph
+// instead of reconstructing it.
+//
+// Note: Apple Color Emoji is system artwork. Fine for a locally built personal
+// app; if this were ever distributed publicly it would need original artwork.
 //
 // Usage: swift scripts/make-icon.swift
 
@@ -11,8 +18,8 @@ let outputDirectory = "Sources/Ascend/Resources"
 let iconsetPath = "\(outputDirectory)/AppIcon.iconset"
 
 // Marine gradient, the app's accent hue.
-let topColor = NSColor(srgbRed: 0.208, green: 0.549, blue: 0.671, alpha: 1)     // #35 8C AB
-let bottomColor = NSColor(srgbRed: 0.071, green: 0.290, blue: 0.400, alpha: 1)  // #12 4A 66
+let topColor = NSColor(srgbRed: 0.208, green: 0.549, blue: 0.671, alpha: 1)     // #358CAB
+let bottomColor = NSColor(srgbRed: 0.071, green: 0.290, blue: 0.400, alpha: 1)  // #124A66
 
 func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     let rep = NSBitmapImageRep(
@@ -24,107 +31,33 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let context = NSGraphicsContext.current!.cgContext
     context.setShouldAntialias(true)
-    context.interpolationQuality = .high
+    NSGraphicsContext.current!.imageInterpolation = .high
 
     // macOS icons sit inside a margin rather than filling the canvas.
     let inset = size * 0.0977
     let rect = CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2)
     let radius = rect.width * 0.2237  // squircle-ish corner
 
-    let squircle = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
-
     context.saveGState()
-    squircle.addClip()
-    let gradient = NSGradient(starting: topColor, ending: bottomColor)!
-    gradient.draw(in: rect, angle: -90)
-
+    NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).addClip()
+    NSGradient(starting: topColor, ending: bottomColor)!.draw(in: rect, angle: -90)
     // A soft top highlight keeps the face from looking flat.
-    let highlight = NSGradient(colors: [NSColor(white: 1, alpha: 0.20),
-                                        NSColor(white: 1, alpha: 0.0)])!
-    highlight.draw(in: CGRect(x: rect.minX, y: rect.midY,
-                              width: rect.width, height: rect.height / 2), angle: -90)
+    NSGradient(colors: [NSColor(white: 1, alpha: 0.16), NSColor(white: 1, alpha: 0)])!
+        .draw(in: CGRect(x: rect.minX, y: rect.midY,
+                         width: rect.width, height: rect.height / 2), angle: -90)
     context.restoreGState()
 
-    // The mark is a banknote with wings.
-    //
-    // Two things decide whether this reads as wings rather than horns: the
-    // wings attach at the note's mid-height and sweep outward rather than
-    // rising from its top edge, and the note carries no punched hole — a hole
-    // in the centre turns the whole shape into a face.
-    func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-        CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
-    }
+    let glyphSide = rect.width * 0.74
+    let font = NSFont(name: "Apple Color Emoji", size: glyphSide)
+        ?? NSFont.systemFont(ofSize: glyphSide)
+    let glyph = NSAttributedString(string: "💸", attributes: [.font: font])
+    let glyphSize = glyph.size()
 
-    context.saveGState()
-    context.setShadow(offset: CGSize(width: 0, height: -rect.width * 0.014),
-                      blur: rect.width * 0.036,
-                      color: NSColor(white: 0, alpha: 0.24).cgColor)
-
-    // A wing: leading edge bowed up from root to tip, trailing edge scalloped
-    // back into feathers.
-    func drawWing(mirrored: Bool) {
-        let rootX: CGFloat = 0.580, rootY: CGFloat = 0.415
-        let tipX: CGFloat = 0.965, tipY: CGFloat = 0.665
-        let depth: CGFloat = 0.163
-        let feathers = 3
-
-        func fx(_ v: CGFloat) -> CGFloat { mirrored ? 1 - v : v }
-
-        let path = NSBezierPath()
-        path.move(to: point(fx(rootX), rootY + depth * 0.5))
-        path.curve(to: point(fx(tipX), tipY),
-                   controlPoint1: point(fx(rootX + (tipX - rootX) * 0.35), rootY + depth * 0.98),
-                   controlPoint2: point(fx(tipX - (tipX - rootX) * 0.18), tipY + depth * 0.36))
-
-        var previous = CGPoint(x: tipX, y: tipY)
-        for step in 1...feathers {
-            let progress = CGFloat(step) / CGFloat(feathers)
-            let nextX = tipX + (rootX - tipX) * progress
-            let nextY = tipY + (rootY - tipY) * progress - depth * 0.30
-            let scallopX = (previous.x + nextX) / 2
-            let scallopY = (previous.y + nextY) / 2 - depth * 0.46
-            path.curve(to: point(fx(nextX), nextY),
-                       controlPoint1: point(fx(scallopX), scallopY),
-                       controlPoint2: point(fx(scallopX), scallopY))
-            previous = CGPoint(x: nextX, y: nextY)
-        }
-        path.close()
-        NSColor.white.setFill()
-        path.fill()
-    }
-
-    drawWing(mirrored: false)
-    drawWing(mirrored: true)
-
-    // The note, tilted a touch so the mark has some motion.
-    let centre = point(0.50, 0.435)
-    let noteBox = CGRect(x: centre.x - rect.width * 0.1975,
-                         y: centre.y - rect.height * 0.136,
-                         width: rect.width * 0.395,
-                         height: rect.height * 0.272)
-    let tilt = NSAffineTransform()
-    tilt.translateX(by: centre.x, yBy: centre.y)
-    tilt.rotate(byDegrees: -6)
-    tilt.translateX(by: -centre.x, yBy: -centre.y)
-
-    let note = NSBezierPath(roundedRect: noteBox,
-                            xRadius: noteBox.height * 0.20,
-                            yRadius: noteBox.height * 0.20)
-    note.transform(using: tilt as AffineTransform)
-    NSColor.white.setFill()
-    note.fill()
-    context.restoreGState()
-
-    // Inner rule reads as banknote engraving at large sizes and simply
-    // disappears at 16pt, where the silhouette carries the meaning.
-    let innerBox = noteBox.insetBy(dx: noteBox.height * 0.19, dy: noteBox.height * 0.21)
-    let inner = NSBezierPath(roundedRect: innerBox,
-                             xRadius: innerBox.height * 0.3,
-                             yRadius: innerBox.height * 0.3)
-    inner.transform(using: tilt as AffineTransform)
-    inner.lineWidth = rect.width * 0.015
-    bottomColor.withAlphaComponent(0.55).setStroke()
-    inner.stroke()
+    context.setShadow(offset: CGSize(width: 0, height: -rect.width * 0.012),
+                      blur: rect.width * 0.035,
+                      color: NSColor(white: 0, alpha: 0.30).cgColor)
+    glyph.draw(at: CGPoint(x: rect.midX - glyphSize.width / 2,
+                           y: rect.midY - glyphSize.height / 2))
 
     NSGraphicsContext.restoreGraphicsState()
     return rep
