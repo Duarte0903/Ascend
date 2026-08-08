@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import SwiftData
-@testable import FinanceTracker
+@testable import Ascend
 
 @MainActor
 private func seededContext() throws -> ModelContext {

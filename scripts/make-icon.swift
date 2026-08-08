@@ -8,7 +8,7 @@
 import AppKit
 import Foundation
 
-let outputDirectory = "Sources/FinanceTracker/Resources"
+let outputDirectory = "Sources/Ascend/Resources"
 let iconsetPath = "\(outputDirectory)/AppIcon.iconset"
 
 // Marine gradient, the app's accent hue.

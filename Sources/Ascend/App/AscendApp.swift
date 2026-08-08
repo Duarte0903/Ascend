@@ -4,7 +4,7 @@ import AppKit
 import UniformTypeIdentifiers
 
 @main
-struct FinanceTrackerApp: App {
+struct AscendApp: App {
     let container: ModelContainer
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
 
@@ -64,7 +64,7 @@ struct FinanceTrackerApp: App {
         else { return }
 
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "finance-tracker-backup.json"
+        panel.nameFieldStringValue = "ascend-backup.json"
         panel.allowedContentTypes = [.json]
         if panel.runModal() == .OK, let url = panel.url {
             try? data.write(to: url)

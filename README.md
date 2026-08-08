@@ -1,4 +1,4 @@
-# Finance Tracker
+# Ascend
 
 A native macOS net-worth tracker that replaces the `net_worth_tracker_pro` Excel workbook,
 and adds what a spreadsheet cannot do: creating, editing, archiving and deleting bank
@@ -10,7 +10,7 @@ accounts without rewriting any formulas.
 ./scripts/install.sh
 ```
 
-Builds, ad-hoc signs, and copies the app to `/Applications/Finance Tracker.app`.
+Builds, ad-hoc signs, and copies the app to `/Applications/Ascend.app`.
 
 To build without installing:
 

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import SwiftData
-@testable import FinanceTracker
+@testable import Ascend
 
 @MainActor
 @Test func exportThenRestoreRoundTripsEveryNumber() throws {

@@ -1,4 +1,4 @@
-name: FinanceTracker
+name: Ascend
 options:
   bundleIdPrefix: com.duarte
   deploymentTarget:
@@ -14,17 +14,17 @@ settings:
     CODE_SIGNING_ALLOWED: "NO"
     ENABLE_HARDENED_RUNTIME: "NO"
 targets:
-  FinanceTracker:
+  Ascend:
     type: application
     platform: macOS
     sources:
-      - path: Sources/FinanceTracker
+      - path: Sources/Ascend
     info:
-      path: Sources/FinanceTracker/Resources/Info.plist
+      path: Sources/Ascend/Resources/Info.plist
       properties:
-        CFBundleName: Finance Tracker
-        CFBundleDisplayName: Finance Tracker
-        CFBundleIdentifier: com.duarte.financetracker
+        CFBundleName: Ascend
+        CFBundleDisplayName: Ascend
+        CFBundleIdentifier: com.duarte.ascend
         CFBundleShortVersionString: "1.0"
         CFBundleIconFile: AppIcon
         LSMinimumSystemVersion: "26.0"
@@ -32,22 +32,22 @@ targets:
         NSHumanReadableCopyright: ""
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.duarte.financetracker
+        PRODUCT_BUNDLE_IDENTIFIER: com.duarte.ascend
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
         ENABLE_APP_SANDBOX: "NO"
-  FinanceTrackerTests:
+  AscendTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/FinanceTrackerTests
+      - path: Tests/AscendTests
     dependencies:
-      - target: FinanceTracker
+      - target: Ascend
 schemes:
-  FinanceTracker:
+  Ascend:
     build:
       targets:
-        FinanceTracker: all
-        FinanceTrackerTests: [test]
+        Ascend: all
+        AscendTests: [test]
     test:
       targets:
-        - FinanceTrackerTests
+        - AscendTests

@@ -1,5 +1,5 @@
 import Foundation
-@testable import FinanceTracker
+@testable import Ascend
 
 /// The source workbook, expressed as engine input. Every expected value in the
 /// test suite is traceable to net_worth_tracker_pro.pdf.

@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import SwiftData
-@testable import FinanceTracker
+@testable import Ascend
 
 /// Asserts the exact strings the screens display, against the values printed in
 /// net_worth_tracker_pro.pdf. This is the numeric half of visual verification:

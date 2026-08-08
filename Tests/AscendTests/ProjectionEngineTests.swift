@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import FinanceTracker
+@testable import Ascend
 
 private let tol = 0.01
 
