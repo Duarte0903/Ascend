@@ -5,13 +5,13 @@ Status: Approved
 
 ## Purpose
 
-Replace the `net_worth_tracker_pro` Excel workbook with a native macOS app that keeps every
+Replace a spreadsheet-based net-worth tracker with a native macOS app that keeps every
 piece of the workbook's functionality, and adds what the spreadsheet cannot do: creating,
 editing, reordering, archiving and deleting bank accounts without rewriting formulas.
 
 The workbook has six sheets — Dashboard, Monthly Balances, Trends & Charts, Current
-Allocation, Goals, Projections — all driven by four hardcoded accounts (Banco CTT, Revolut,
-XTB, Edenred). The app generalises those four hardcoded columns into an arbitrary set of
+Allocation, Goals, Projections — all driven by four hardcoded account columns. The app
+generalises those hardcoded columns into an arbitrary set of
 user-managed accounts, while reproducing the workbook's numbers exactly.
 
 ## Decisions
@@ -64,7 +64,7 @@ already free, and would introduce staleness bugs on every account-flag edit. Rej
 | `kind` | enum | `main`, `savings`, `investment`, `restricted` |
 | `colorHex` | String | Chart colour |
 | `sortOrder` | Int | Column order on Balances |
-| `includeInUsable` | Bool | False for Edenred (food-only card) |
+| `includeInUsable` | Bool | False for restricted accounts such as a food-only card |
 | `countsAsSavings` | Bool | Feeds the Savings Rate numerator |
 | `expectedAnnualReturn` | Double | Decimal fraction, e.g. `0.07` |
 | `monthlyContribution` | Decimal | Projection contribution |
@@ -110,8 +110,8 @@ Given records sorted by date ascending, with `prev` the preceding record:
 - `change% = change€ ÷ prev.total` — undefined if `prev.total == 0`
 - `savingsRate = Σ (entry.amount − prev.entry.amount) for accounts where countsAsSavings ÷ prev.total`
 
-Worked example (record 5 of the workbook): Revolut 250 → 350.27 (+100.27), XTB 710.85 →
-819.49 (+108.64); (100.27 + 108.64) ÷ 7 495 = **2.8 %** ✓
+Worked example, using the sample portfolio: Savings 700 → 800 (+100), Brokerage 600 → 700
+(+100); (100 + 100) ÷ 2 500 = **8 %** ✓
 
 ### Dashboard KPIs
 
@@ -153,8 +153,9 @@ balance = balance × (1 + expectedAnnualReturn)^(1/12)
         + (isLeftoverDestination ? leftoverPerMonth : 0)
 ```
 
-Verified: month 1 Banco CTT = 6 962 + 717 = **7 679 €** ✓; XTB = 819 × 1,07^(1/12) + 100 =
-**924 €** ✓; Revolut = 350 × 1,011^(1/12) + 100 = **451 €** ✓; Edenred flat at **278 €** ✓.
+Verified against the sample portfolio: month 1 Current Account = 1 500 + 1 700 − 500 =
+**2 700 €** ✓; Brokerage = 700 × 1,06^(1/12) + 150 = **853 €** ✓; Savings = 800 ×
+1,01^(1/12) + 150 = **951 €** ✓; Meal Card flat at **100 €** ✓.
 
 Outputs: month-by-month table, net worth at months 12 / 36 / 60, value at horizon, and
 `monthsToGoal` = first month where net worth ≥ target → **18** ✓.

@@ -12,6 +12,8 @@ final class Expense {
     var amount: Double = 0
     var frequencyRaw: String = ExpenseFrequency.monthly.rawValue
     var categoryID: UUID?
+    /// Which account pays this. Defaults to the main account.
+    var accountID: UUID?
     var isActive: Bool = true
     var sortOrder: Int = 0
 
@@ -25,20 +27,21 @@ final class Expense {
 
     init(id: UUID = UUID(), name: String, note: String = "", amount: Double,
          frequency: ExpenseFrequency = .monthly, categoryID: UUID? = nil,
-         isActive: Bool = true, sortOrder: Int = 0) {
+         accountID: UUID? = nil, isActive: Bool = true, sortOrder: Int = 0) {
         self.id = id
         self.name = name
         self.note = note
         self.amount = amount
         self.frequencyRaw = frequency.rawValue
         self.categoryID = categoryID
+        self.accountID = accountID
         self.isActive = isActive
         self.sortOrder = sortOrder
     }
 
     func toInput() -> ExpenseInput {
         ExpenseInput(id: id, name: name, amount: amount, frequency: frequency,
-                     categoryID: categoryID, isActive: isActive)
+                     categoryID: categoryID, accountID: accountID, isActive: isActive)
     }
 }
 

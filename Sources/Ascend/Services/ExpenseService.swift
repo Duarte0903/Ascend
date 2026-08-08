@@ -24,10 +24,21 @@ enum ExpenseError: LocalizedError, Equatable {
 enum ExpenseService {
     // MARK: - Expenses
 
+    /// The account a new expense is paid from unless told otherwise: the one
+    /// that receives the monthly leftover — the main account — falling back to
+    /// the first active account.
+    static func defaultAccountID(in context: ModelContext) -> UUID? {
+        let accounts = ((try? context.fetch(FetchDescriptor<Account>())) ?? [])
+            .filter { !$0.isArchived }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        return accounts.first(where: \.isLeftoverDestination)?.id ?? accounts.first?.id
+    }
+
     @discardableResult
     static func create(name: String, amount: Double,
                        frequency: ExpenseFrequency = .monthly,
                        categoryID: UUID? = nil,
+                       accountID: UUID? = nil,
                        in context: ModelContext) throws -> Expense {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ExpenseError.emptyName }
@@ -35,6 +46,7 @@ enum ExpenseService {
         let existing = (try? context.fetch(FetchDescriptor<Expense>())) ?? []
         let expense = Expense(name: trimmed, amount: max(0, amount), frequency: frequency,
                               categoryID: categoryID,
+                              accountID: accountID ?? defaultAccountID(in: context),
                               sortOrder: (existing.map(\.sortOrder).max() ?? -1) + 1)
         context.insert(expense)
         try? context.save()
@@ -121,6 +133,12 @@ enum ExpenseService {
     static func assign(_ expense: Expense, to category: ExpenseCategory?,
                        in context: ModelContext) {
         expense.categoryID = category?.id
+        try? context.save()
+    }
+
+    static func assign(_ expense: Expense, toAccount account: Account?,
+                       in context: ModelContext) {
+        expense.accountID = account?.id
         try? context.save()
     }
 }

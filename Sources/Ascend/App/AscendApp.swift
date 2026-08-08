@@ -21,6 +21,7 @@ struct AscendApp: App {
         SeedData.migrateLegacyColors(context)
         SeedData.migrateCategories(context)
         SeedData.migrateExpenses(context)
+        SeedData.migrateExpenseAccounts(context)
     }
 
     var body: some Scene {

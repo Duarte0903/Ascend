@@ -24,22 +24,22 @@ struct AllocationView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                if allocation.slices.isEmpty {
-                    ContentUnavailableView("Nothing to allocate yet",
-                                           systemImage: "chart.pie",
-                                           description: Text("Add a record on the Balances screen."))
-                        .frame(height: 320)
-                } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: Theme.gap)],
-                              spacing: Theme.gap) {
-                        donut
-                        breakdown
-                    }
+        FillingScreen {
+            if allocation.slices.isEmpty {
+                ContentUnavailableView("Nothing to allocate yet",
+                                       systemImage: "chart.pie",
+                                       description: Text("Add a record on the Balances screen."))
+                    .frame(maxWidth: .infinity)
+                    .fillsHeight()
+            } else {
+                // Equal halves that both stretch, so neither card leaves a void
+                // beneath it on a tall window.
+                HStack(alignment: .top, spacing: Theme.gap) {
+                    donut.fillsHeight(minimum: 320)
+                    breakdown.fillsHeight(minimum: 320)
                 }
+                .fillsHeight(minimum: 320)
             }
-            .padding(Theme.screenPadding)
         }
     }
 
@@ -70,7 +70,7 @@ struct AllocationView: View {
                     }
                 }
             }
-            .frame(height: 270)
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -102,7 +102,7 @@ struct AllocationView: View {
                         HStack(spacing: 9) {
                             RoundedRectangle(cornerRadius: 3, style: .continuous)
                                 .fill(Color(hex: slice.colorHex))
-                                .frame(width: 9, height: 9)
+                                .frame(width: Theme.Size.dot, height: Theme.Size.dot)
                             Text(slice.name).font(.system(size: 12.5))
                         }
                         .help(note(for: slice.accountID) ?? slice.name)
@@ -126,6 +126,7 @@ struct AllocationView: View {
                     Text("")
                 }
             }
+            Spacer(minLength: 0)
         }
     }
 

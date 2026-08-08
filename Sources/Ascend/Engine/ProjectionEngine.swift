@@ -11,6 +11,12 @@ struct ProjectionAssumptions: Sendable {
     var savingsRateOfIncome: Double
     var horizonMonths: Int
     var hasLeftoverDestination: Bool
+    /// What each account pays out per month, after resolving every expense to
+    /// the account responsible for it.
+    var monthlyExpensesByAccount: [UUID: Double]
+    /// Expenses whose account is missing or archived, and so fall back to the
+    /// leftover destination.
+    var unassignedMonthlyExpenses: Double
 }
 
 struct ProjectionMonth: Identifiable, Sendable {
@@ -50,6 +56,21 @@ enum ProjectionEngine {
         let leftover = input.monthlyNetIncome - input.maxMonthlyExpenses - totalInvested
         let leftoverID = accounts.first(where: \.isLeftoverDestination)?.id
 
+        // Each expense is debited from the account that pays it. Anything
+        // pointing at a missing or archived account falls back to the leftover
+        // destination, so no expense can quietly go unpaid and inflate the
+        // forecast.
+        let knownIDs = Set(accounts.map(\.id))
+        var expensesByAccount: [UUID: Double] = [:]
+        var unassigned: Double = 0
+        for expense in input.expenses where expense.isActive {
+            let resolved = expense.accountID.flatMap { knownIDs.contains($0) ? $0 : nil }
+            if resolved == nil { unassigned += expense.monthlyAmount }
+            if let target = resolved ?? leftoverID {
+                expensesByAccount[target, default: 0] += expense.monthlyAmount
+            }
+        }
+
         let assumptions = ProjectionAssumptions(
             monthlyNetIncome: input.monthlyNetIncome,
             maxMonthlyExpenses: input.maxMonthlyExpenses,
@@ -59,7 +80,9 @@ enum ProjectionEngine {
                 ? 0
                 : (input.monthlyNetIncome - input.maxMonthlyExpenses) / input.monthlyNetIncome,
             horizonMonths: input.projectionHorizonMonths,
-            hasLeftoverDestination: leftoverID != nil)
+            hasLeftoverDestination: leftoverID != nil,
+            monthlyExpensesByAccount: expensesByAccount,
+            unassignedMonthlyExpenses: unassigned)
 
         guard let latest = records.last else {
             return Projection(assumptions: assumptions, months: [], monthsToGoal: nil)
@@ -81,13 +104,20 @@ enum ProjectionEngine {
         var months = [snapshot(month: 0, balances: balances)]
         var monthsToGoal: Int? = months[0].netWorth >= input.targetNetWorth ? 0 : nil
 
+        // Income lands in the leftover destination, less what is transferred out
+        // as contributions. Expenses are deliberately *not* deducted here —
+        // each account pays its own below, and taking them off twice would
+        // understate every month.
+        let surplusToDestination = input.monthlyNetIncome - totalInvested
+
         if input.projectionHorizonMonths >= 1 {
             for month in 1...input.projectionHorizonMonths {
                 for account in accounts {
                     let monthlyGrowth = pow(1 + account.expectedAnnualReturn, 1.0 / 12.0)
                     var value = (balances[account.id] ?? 0) * monthlyGrowth
                     value += account.monthlyContribution
-                    if account.id == leftoverID { value += leftover }
+                    if account.id == leftoverID { value += surplusToDestination }
+                    value -= expensesByAccount[account.id] ?? 0
                     balances[account.id] = value
                 }
                 let snap = snapshot(month: month, balances: balances)

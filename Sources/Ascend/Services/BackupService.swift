@@ -23,6 +23,7 @@ struct BackupFile: Codable {
     struct ExpenseDTO: Codable {
         var id: UUID, name: String, note: String, amount: Double
         var frequency: String, categoryID: UUID?, isActive: Bool, sortOrder: Int
+        var accountID: UUID?
     }
     struct ExpenseCategoryDTO: Codable {
         var id: UUID, name: String, colorHex: String, sortOrder: Int
@@ -77,7 +78,8 @@ enum BackupService {
             expenses: expenses.map {
                 .init(id: $0.id, name: $0.name, note: $0.note, amount: $0.amount,
                       frequency: $0.frequency.rawValue, categoryID: $0.categoryID,
-                      isActive: $0.isActive, sortOrder: $0.sortOrder)
+                      isActive: $0.isActive, sortOrder: $0.sortOrder,
+                      accountID: $0.accountID)
             },
             expenseCategories: expenseCategories.map {
                 .init(id: $0.id, name: $0.name, colorHex: $0.colorHex, sortOrder: $0.sortOrder)
@@ -167,8 +169,8 @@ enum BackupService {
             context.insert(Expense(id: dto.id, name: dto.name, note: dto.note,
                                    amount: dto.amount,
                                    frequency: ExpenseFrequency(rawValue: dto.frequency) ?? .monthly,
-                                   categoryID: dto.categoryID, isActive: dto.isActive,
-                                   sortOrder: dto.sortOrder))
+                                   categoryID: dto.categoryID, accountID: dto.accountID,
+                                   isActive: dto.isActive, sortOrder: dto.sortOrder))
         }
 
         context.insert(AppSettings(

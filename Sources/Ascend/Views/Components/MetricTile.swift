@@ -27,7 +27,11 @@ struct MetricTile: View {
                     .lineLimit(1)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // maxHeight must be applied *before* the padding and background: the
+        // background sizes itself to whatever it is attached to, so stretching
+        // the tile from outside grows an invisible wrapper and centres the card
+        // inside it, leaving the visible boxes different heights.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(Color.ftSurface,

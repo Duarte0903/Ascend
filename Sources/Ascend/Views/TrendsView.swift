@@ -37,26 +37,28 @@ struct TrendsView: View {
     private var accountColors: [Color] { activeAccounts.map { Color(hex: $0.colorHex) } }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                if allDerived.isEmpty {
-                    ContentUnavailableView("Nothing to chart yet",
-                                           systemImage: "chart.xyaxis.line",
-                                           description: Text("Add records on the Balances screen."))
-                        .frame(height: 320)
-                } else if derived.isEmpty {
-                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
-                } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: Theme.gap)],
-                              spacing: Theme.gap) {
-                        stackedChart
-                        comparisonChart
-                        growthChart
-                        savingsChart
-                    }
+        FillingScreen {
+            if allDerived.isEmpty {
+                ContentUnavailableView("Nothing to chart yet",
+                                       systemImage: "chart.xyaxis.line",
+                                       description: Text("Add records on the Balances screen."))
+                    .frame(maxWidth: .infinity)
+                    .fillsHeight()
+            } else if derived.isEmpty {
+                NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
+            } else {
+                // Two rows of two, each row taking half the leftover height.
+                HStack(alignment: .top, spacing: Theme.gap) {
+                    stackedChart.fillsHeight(minimum: 230)
+                    comparisonChart.fillsHeight(minimum: 230)
                 }
+                .fillsHeight(minimum: 230)
+                HStack(alignment: .top, spacing: Theme.gap) {
+                    growthChart.fillsHeight(minimum: 230)
+                    savingsChart.fillsHeight(minimum: 230)
+                }
+                .fillsHeight(minimum: 230)
             }
-            .padding(Theme.screenPadding)
         }
         .toolbar {
             ToolbarItemGroup {
@@ -76,14 +78,14 @@ struct TrendsView: View {
                                  y: .value("Amount", row.amount(for: account.id)),
                                  stacking: .standard)
                             .foregroundStyle(by: .value("Account", account.name))
-                            .interpolationMethod(.monotone)
+                            .interpolationMethod(.linear)
                     }
                 }
             }
             .chartForegroundStyleScale(range: accountColors)
             .chartYAxis { softAxis }
             .chartLegend(position: .bottom, alignment: .leading, spacing: 10)
-            .frame(height: 230)
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -96,14 +98,14 @@ struct TrendsView: View {
                                  y: .value("Amount", row.amount(for: account.id)))
                             .foregroundStyle(by: .value("Account", account.name))
                             .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
-                            .interpolationMethod(.monotone)
+                            .interpolationMethod(.linear)
                     }
                 }
             }
             .chartForegroundStyleScale(range: accountColors)
             .chartYAxis { softAxis }
             .chartLegend(position: .bottom, alignment: .leading, spacing: 10)
-            .frame(height: 230)
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -114,14 +116,14 @@ struct TrendsView: View {
                          y: .value("Change", (row.changePercent ?? 0) * 100))
                     .foregroundStyle(Color.ftAccent)
                     .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
-                    .interpolationMethod(.monotone)
+                    .interpolationMethod(.linear)
                 PointMark(x: .value("Date", row.date),
                           y: .value("Change", (row.changePercent ?? 0) * 100))
                     .foregroundStyle(Color.ftAccent)
                     .symbolSize(55)
             }
             .chartYAxis { softAxis }
-            .frame(height: 210)
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -138,7 +140,7 @@ struct TrendsView: View {
                     .cornerRadius(5)
             }
             .chartYAxis { softAxis }
-            .frame(height: 210)
+            .frame(maxHeight: .infinity)
         }
     }
 

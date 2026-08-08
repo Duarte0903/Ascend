@@ -6,15 +6,15 @@ private let tol = 0.005
 @Test func computesAllNineDashboardKPIs() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
     let m = DashboardMetrics.compute(records: d)
-    #expect(abs(m.currentNetWorth! - 8409.74) < tol)
-    #expect(abs(m.usableCash! - 8132.11) < tol)
-    #expect(abs(m.latestChangeAmount! - 914.71) < tol)
-    #expect(abs(m.latestChangePercent! - 0.1220427) < 0.00001)
-    #expect(abs(m.totalGrowth! - 944.73) < tol)
-    #expect(abs(m.bestChange! - 914.71) < tol)
-    #expect(abs(m.averageChange! - 236.1825) < tol)
-    #expect(m.recordCount == 5)
-    #expect(abs(m.averageSavingsRate! - 0.008642763) < 0.0000001)
+    #expect(abs(m.currentNetWorth! - 3100) < tol)
+    #expect(abs(m.usableCash! - 3000) < tol)
+    #expect(abs(m.latestChangeAmount! - 600) < tol)
+    #expect(abs(m.latestChangePercent! - 0.24) < 0.00001)
+    #expect(abs(m.totalGrowth! - 1000) < tol)
+    #expect(abs(m.bestChange! - 600) < tol)
+    #expect(abs(m.averageChange! - 333.3333333) < tol)
+    #expect(m.recordCount == 4)
+    #expect(abs(m.averageSavingsRate! - 0.0721212121) < 0.0000001)
 }
 
 @Test func emptyPortfolioYieldsUndefinedKPIs() {
@@ -30,7 +30,7 @@ private let tol = 0.005
     var input = WorkbookFixture.portfolio
     input.records = [WorkbookFixture.records[0]]
     let m = DashboardMetrics.compute(records: LedgerEngine.derive(input))
-    #expect(abs(m.currentNetWorth! - 7465.01) < tol)
+    #expect(abs(m.currentNetWorth! - 2100) < tol)
     #expect(m.totalGrowth! == 0)
     #expect(m.averageChange == nil)
     #expect(m.bestChange == nil)

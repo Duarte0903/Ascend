@@ -4,15 +4,15 @@ import Testing
 private let nnbsp = "\u{202F}"
 
 @Test func formatsWholeEurosWithNarrowSpaceSeparator() {
-    #expect(Money.currency(8409.74) == "8\(nnbsp)410\(nnbsp)€")
+    #expect(Money.currency(3100.40) == "3\(nnbsp)100\(nnbsp)€")
 }
 
 @Test func formatsCentsWhenAsked() {
-    #expect(Money.currency(6285.73, decimals: 2) == "6\(nnbsp)285,73\(nnbsp)€")
+    #expect(Money.currency(1234.56, decimals: 2) == "1\(nnbsp)234,56\(nnbsp)€")
 }
 
 @Test func formatsSmallValuesWithoutSeparator() {
-    #expect(Money.currency(915) == "915\(nnbsp)€")
+    #expect(Money.currency(600) == "600\(nnbsp)€")
 }
 
 @Test func formatsNegativeValues() {
@@ -20,7 +20,7 @@ private let nnbsp = "\u{202F}"
 }
 
 @Test func formatsPercentToOneDecimal() {
-    #expect(Money.percent(0.1220427) == "12,2\(nnbsp)%")
+    #expect(Money.percent(0.2400) == "24,0\(nnbsp)%")
 }
 
 @Test func nilValuesRenderAsEmDash() {

@@ -63,7 +63,7 @@ struct ProjectionsView: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(Color.ftInkTertiary)
                     DerivedText(text: Money.currency(projection.assumptions.maxMonthlyExpenses),
-                                width: 108)
+                                width: Theme.Size.field)
                 }
                 GridRow {
                     Text("Projection horizon (months)").font(.system(size: 12.5))
@@ -82,8 +82,38 @@ struct ProjectionsView: View {
                            Money.percent(projection.assumptions.savingsRateOfIncome))
             }
 
+            if !projection.assumptions.monthlyExpensesByAccount.isEmpty {
+                Divider().padding(.vertical, 2)
+                VStack(alignment: .leading, spacing: 7) {
+                    Eyebrow("Paid out of")
+                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
+                        ForEach(activeAccounts) { account in
+                            if let amount = projection.assumptions
+                                .monthlyExpensesByAccount[account.id], amount > 0 {
+                                GridRow {
+                                    HStack(spacing: 8) {
+                                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                            .fill(Color(hex: account.colorHex))
+                                            .frame(width: Theme.Size.dot, height: Theme.Size.dot)
+                                        Text(account.name).font(.system(size: 12.5))
+                                    }
+                                    DerivedText(text: Money.currency(amount, decimals: 2),
+                                                width: Theme.Size.field)
+                                }
+                            }
+                        }
+                    }
+                    if projection.assumptions.unassignedMonthlyExpenses > 0 {
+                        Text("\(Money.currency(projection.assumptions.unassignedMonthlyExpenses)) has no account set, so it comes out of the main one.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             VStack(alignment: .leading, spacing: 4) {
-                Text("Monthly expenses is the total of your **Expenses** screen. Per-account contributions and expected returns live on **Accounts**.")
+                Text("Monthly expenses is the total of your **Expenses** screen, and each one is taken out of the account that pays it. Contributions and expected returns live on **Accounts**.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.ftInkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -108,7 +138,7 @@ struct ProjectionsView: View {
             Text(label)
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.ftInkTertiary)
-            DerivedText(text: value, width: 108)
+            DerivedText(text: value, width: Theme.Size.field)
         }
     }
 
@@ -116,18 +146,39 @@ struct ProjectionsView: View {
 
     private var outlookCard: some View {
         CardSection("Outlook") {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
-                                GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                MetricTile(title: "In 1 year", value: Money.currency(projection.netWorth(atMonth: 12)))
-                MetricTile(title: "In 3 years", value: Money.currency(projection.netWorth(atMonth: 36)))
-                MetricTile(title: "In 5 years", value: Money.currency(projection.netWorth(atMonth: 60)))
-                MetricTile(title: "Months to goal",
-                           value: projection.monthsToGoal.map(String.init) ?? Money.dash,
-                           caption: goalDateCaption,
-                           valueColor: projection.monthsToGoal == nil ? .ftInkTertiary : .ftPositive)
+            // The tiles share the card's height with the assumptions card
+            // beside them, rather than the card stopping short of it.
+            VStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    MetricTile(title: "In 1 year",
+                               value: Money.currency(projection.netWorth(atMonth: 12)))
+                        .frame(maxHeight: .infinity)
+                    MetricTile(title: "In 3 years",
+                               value: Money.currency(projection.netWorth(atMonth: 36)))
+                        .frame(maxHeight: .infinity)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: 10) {
+                    MetricTile(title: "In 5 years",
+                               value: Money.currency(projection.netWorth(atMonth: 60)))
+                        .frame(maxHeight: .infinity)
+                    MetricTile(title: "Months to goal",
+                               value: projection.monthsToGoal.map(String.init) ?? Money.dash,
+                               caption: goalDateCaption,
+                               valueColor: projection.monthsToGoal == nil
+                                   ? .ftInkTertiary : .ftPositive)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                if let horizon = projection.months.last {
+                    MetricTile(title: "At horizon (\(settings.projectionHorizonMonths) mo)",
+                               value: Money.currency(horizon.netWorth),
+                               caption: horizon.date.formatted(.dateTime.month(.abbreviated).year()))
+                }
+                Spacer(minLength: 0)
             }
         }
-        .frame(width: 330)
+        .frame(width: Theme.Size.sidePanel)
+        .frame(maxHeight: .infinity)
     }
 
     private var goalDateCaption: String? {
@@ -213,11 +264,14 @@ struct ProjectionsView: View {
             ScrollView(.vertical) {
                 Grid(alignment: .trailing, horizontalSpacing: 16, verticalSpacing: 7) {
                     GridRow {
-                        Text("Month").gridColumnAlignment(.leading)
-                        Text("Date").gridColumnAlignment(.leading)
-                        ForEach(activeAccounts) { Text($0.name) }
-                        Text("Net worth")
-                        Text("Usable")
+                        Text("Month").frame(width: Theme.Size.control, alignment: .leading)
+                        Text("Date").frame(width: Theme.Size.fieldSmall, alignment: .leading)
+                        ForEach(activeAccounts) {
+                            Text($0.name).frame(width: Theme.Size.field, alignment: .trailing)
+                        }
+                        Text("Net worth").frame(width: Theme.Size.field, alignment: .trailing)
+                        Text("Usable").frame(width: Theme.Size.field, alignment: .trailing)
+                        Spacer(minLength: 0)
                     }
                     .font(.system(size: 10.5, weight: .semibold))
                     .tracking(0.5)
@@ -228,20 +282,24 @@ struct ProjectionsView: View {
                     ForEach(projection.months) { month in
                         GridRow {
                             Text("\(month.month)")
-                                .gridColumnAlignment(.leading)
+                                .frame(width: Theme.Size.control, alignment: .leading)
                                 .foregroundStyle(Color.ftInkTertiary)
                             Text(month.date, format: .dateTime.month(.abbreviated).year())
-                                .gridColumnAlignment(.leading)
+                                .frame(width: Theme.Size.fieldSmall, alignment: .leading)
                                 .foregroundStyle(Color.ftInkSecondary)
                             ForEach(activeAccounts) { account in
                                 Text(Money.currency(month.balances[account.id] ?? 0))
+                                    .frame(width: Theme.Size.field, alignment: .trailing)
                                     .foregroundStyle(Color.ftInkSecondary)
                             }
                             Text(Money.currency(month.netWorth))
+                                .frame(width: Theme.Size.field, alignment: .trailing)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(Color.ftInk)
                             Text(Money.currency(month.usable))
+                                .frame(width: Theme.Size.field, alignment: .trailing)
                                 .foregroundStyle(Color.ftInkSecondary)
+                            Spacer(minLength: 0)
                         }
                         .font(.system(size: 11.5, design: .rounded))
                         .monospacedDigit()

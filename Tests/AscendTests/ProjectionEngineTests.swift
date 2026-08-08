@@ -13,9 +13,9 @@ private func project() -> Projection {
 
 @Test func derivesAssumptionsFromInputsAndAccounts() {
     let a = project().assumptions
-    #expect(abs(a.totalInvestedPerMonth - 200) < tol)
-    #expect(abs(a.leftoverPerMonth - 717) < tol)
-    #expect(abs(a.savingsRateOfIncome - 0.8209489) < 0.0000001)
+    #expect(abs(a.totalInvestedPerMonth - 300) < tol)
+    #expect(abs(a.leftoverPerMonth - 1200) < tol)
+    #expect(abs(a.savingsRateOfIncome - 0.75) < 0.0000001)
     #expect(a.horizonMonths == 60)
     #expect(a.hasLeftoverDestination)
 }
@@ -23,32 +23,32 @@ private func project() -> Projection {
 @Test func monthZeroIsTheLatestRecord() {
     let m = project().months[0]
     #expect(m.month == 0)
-    #expect(abs(m.netWorth - 8409.74) < tol)
-    #expect(abs(m.balances[WorkbookFixture.cttID]! - 6962.35) < tol)
+    #expect(abs(m.netWorth - 3100) < tol)
+    #expect(abs(m.balances[WorkbookFixture.currentID]! - 1500) < tol)
 }
 
 @Test func monthOneMatchesTheWorkbook() {
     let m = project().months[1]
-    #expect(abs(m.balances[WorkbookFixture.cttID]! - 7679.35) < tol)
-    #expect(abs(m.balances[WorkbookFixture.revolutID]! - 450.59) < tol)
-    #expect(abs(m.balances[WorkbookFixture.xtbID]! - 924.12) < tol)
-    #expect(abs(m.balances[WorkbookFixture.edenredID]! - 277.63) < tol)
-    #expect(abs(m.netWorth - 9331.69) < tol)
-    #expect(abs(m.usable - 9054.06) < tol)
+    #expect(abs(m.balances[WorkbookFixture.currentID]! - 2700) < tol)
+    #expect(abs(m.balances[WorkbookFixture.savingsID]! - 950.66) < tol)
+    #expect(abs(m.balances[WorkbookFixture.brokerageID]! - 853.41) < tol)
+    #expect(abs(m.balances[WorkbookFixture.mealCardID]! - 100) < tol)
+    #expect(abs(m.netWorth - 4604.07) < tol)
+    #expect(abs(m.usable - 4504.07) < tol)
 }
 
 @Test func restrictedAccountsStayFlat() {
     let p = project()
     for m in p.months {
-        #expect(abs(m.balances[WorkbookFixture.edenredID]! - 277.63) < tol)
+        #expect(abs(m.balances[WorkbookFixture.mealCardID]! - 100) < tol)
     }
 }
 
 @Test func projectsOneThreeAndFiveYearHorizons() {
     let p = project()
-    #expect(abs(p.netWorth(atMonth: 12)! - 19519.03) < 0.5)
-    #expect(abs(p.netWorth(atMonth: 36)! - 42056.05) < 0.5)
-    #expect(abs(p.netWorth(atMonth: 60)! - 65063.23) < 0.5)
+    #expect(abs(p.netWorth(atMonth: 12)! - 21207.21) < 0.5)
+    #expect(abs(p.netWorth(atMonth: 36)! - 57823.50) < 0.5)
+    #expect(abs(p.netWorth(atMonth: 60)! - 95024.25) < 0.5)
 }
 
 @Test func horizonProducesMonthZeroThroughHorizonInclusive() {
@@ -56,7 +56,7 @@ private func project() -> Projection {
 }
 
 @Test func findsMonthsToGoal() {
-    #expect(project().monthsToGoal == 18)
+    #expect(project().monthsToGoal == 5)
 }
 
 @Test func monthsToGoalIsNilWhenGoalIsNotReachedWithinHorizon() {
@@ -84,7 +84,7 @@ private func project() -> Projection {
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
     #expect(p.assumptions.hasLeftoverDestination == false)
-    #expect(abs(p.months[1].balances[WorkbookFixture.cttID]! - 6962.35) < tol)
+    #expect(abs(p.months[1].balances[WorkbookFixture.currentID]! - 1500) < tol)
 }
 
 // MARK: - What counts as investing your income
@@ -96,13 +96,13 @@ private func project() -> Projection {
     var input = WorkbookFixture.portfolio
     input.accounts = input.accounts.map { account in
         var copy = account
-        if copy.id == WorkbookFixture.edenredID { copy.monthlyContribution = 90 }
+        if copy.id == WorkbookFixture.mealCardID { copy.monthlyContribution = 90 }
         return copy
     }
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
-    #expect(abs(p.assumptions.totalInvestedPerMonth - 200) < tol)
-    #expect(abs(p.assumptions.leftoverPerMonth - 717) < tol)
+    #expect(abs(p.assumptions.totalInvestedPerMonth - 300) < tol)
+    #expect(abs(p.assumptions.leftoverPerMonth - 1200) < tol)
 }
 
 /// The balance still grows by that contribution — it is only the funding
@@ -111,12 +111,12 @@ private func project() -> Projection {
     var input = WorkbookFixture.portfolio
     input.accounts = input.accounts.map { account in
         var copy = account
-        if copy.id == WorkbookFixture.edenredID { copy.monthlyContribution = 90 }
+        if copy.id == WorkbookFixture.mealCardID { copy.monthlyContribution = 90 }
         return copy
     }
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
-    #expect(abs(p.months[1].balances[WorkbookFixture.edenredID]! - (277.63 + 90)) < tol)
+    #expect(abs(p.months[1].balances[WorkbookFixture.mealCardID]! - (100 + 90)) < tol)
 }
 
 /// An account that is savings but not usable still counts — either flag is enough.
@@ -124,12 +124,12 @@ private func project() -> Projection {
     var input = WorkbookFixture.portfolio
     input.accounts = input.accounts.map { account in
         var copy = account
-        if copy.id == WorkbookFixture.xtbID { copy.includeInUsable = false }
+        if copy.id == WorkbookFixture.brokerageID { copy.includeInUsable = false }
         return copy
     }
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
-    #expect(abs(p.assumptions.totalInvestedPerMonth - 200) < tol)
+    #expect(abs(p.assumptions.totalInvestedPerMonth - 300) < tol)
 }
 
 /// Flipping both flags off removes the contribution from the total, which
@@ -138,7 +138,7 @@ private func project() -> Projection {
     var input = WorkbookFixture.portfolio
     input.accounts = input.accounts.map { account in
         var copy = account
-        if copy.id == WorkbookFixture.revolutID {
+        if copy.id == WorkbookFixture.savingsID {
             copy.includeInUsable = false
             copy.countsAsSavings = false
         }
@@ -146,8 +146,8 @@ private func project() -> Projection {
     }
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
-    #expect(abs(p.assumptions.totalInvestedPerMonth - 100) < tol)
-    #expect(abs(p.assumptions.leftoverPerMonth - 817) < tol)
+    #expect(abs(p.assumptions.totalInvestedPerMonth - 150) < tol)
+    #expect(abs(p.assumptions.leftoverPerMonth - 1350) < tol)
 }
 
 @Test func projectingWithNoRecordsYieldsNoMonths() {

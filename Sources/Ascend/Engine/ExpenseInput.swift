@@ -41,17 +41,20 @@ struct ExpenseInput: Identifiable, Hashable, Sendable {
     var amount: Double
     var frequency: ExpenseFrequency
     var categoryID: UUID?
+    /// The account the money actually leaves from.
+    var accountID: UUID?
     /// Paused commitments stay in the list but stop counting.
     var isActive: Bool
 
     init(id: UUID, name: String, amount: Double,
          frequency: ExpenseFrequency = .monthly,
-         categoryID: UUID? = nil, isActive: Bool = true) {
+         categoryID: UUID? = nil, accountID: UUID? = nil, isActive: Bool = true) {
         self.id = id
         self.name = name
         self.amount = amount
         self.frequency = frequency
         self.categoryID = categoryID
+        self.accountID = accountID
         self.isActive = isActive
     }
 

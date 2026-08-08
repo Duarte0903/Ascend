@@ -7,14 +7,14 @@ private let tol = 0.005
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
     let a = AllocationMetrics.compute(accounts: WorkbookFixture.accounts, records: d)
     #expect(a.slices.count == 4)
-    #expect(abs(a.total - 8409.74) < tol)
-    #expect(abs(a.usable - 8132.11) < tol)
+    #expect(abs(a.total - 3100) < tol)
+    #expect(abs(a.usable - 3000) < tol)
 
     let expected: [(String, Double, Double)] = [
-        ("Banco CTT", 6962.35, 0.8278912309),
-        ("Revolut", 350.27, 0.0416505148),
-        ("XTB", 819.49, 0.0974453431),
-        ("Edenred", 277.63, 0.0330129112),
+        ("Current Account", 1500, 0.4838709677),
+        ("Savings", 800, 0.2580645161),
+        ("Brokerage", 700, 0.2258064516),
+        ("Meal Card", 100, 0.0322580645),
     ]
     for (name, amount, share) in expected {
         let slice = a.slices.first { $0.name == name }!
@@ -40,16 +40,16 @@ private let tol = 0.005
 
 @Test func computesGoalProgress() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    let g = GoalMetrics.compute(target: 25_000,
+    let g = GoalMetrics.compute(target: 10_000,
                                 dashboard: DashboardMetrics.compute(records: d))
-    #expect(abs(g.remaining - 16_590.26) < tol)
-    #expect(abs(g.progress! - 0.336390) < 0.00001)
-    #expect(g.estimatedRecordsToGoal == 71)
+    #expect(abs(g.remaining - 6_900) < tol)
+    #expect(abs(g.progress! - 0.31) < 0.00001)
+    #expect(g.estimatedRecordsToGoal == 21)
 }
 
 @Test func goalReachedClampsRemainingToZero() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    let g = GoalMetrics.compute(target: 5_000,
+    let g = GoalMetrics.compute(target: 2_000,
                                 dashboard: DashboardMetrics.compute(records: d))
     #expect(g.remaining == 0)
     #expect(g.progress! > 1.0)
@@ -59,7 +59,7 @@ private let tol = 0.005
 @Test func estimateIsUndefinedWhenAverageChangeIsNotPositive() {
     var input = WorkbookFixture.portfolio
     input.records = Array(WorkbookFixture.records.prefix(1))
-    let g = GoalMetrics.compute(target: 25_000,
+    let g = GoalMetrics.compute(target: 10_000,
                                 dashboard: DashboardMetrics.compute(records: LedgerEngine.derive(input)))
     #expect(g.estimatedRecordsToGoal == nil)
 }

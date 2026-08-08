@@ -12,33 +12,36 @@ enum SeedData {
             categories.first { $0.name == name }
         }
 
-        let ctt = Account(name: "Banco CTT", note: "Main current account — salary lands here",
+        let current = Account(name: "Current Account",
+                          note: "Everyday account — income lands here",
                           categoryID: category("Main")?.id, legacyKind: "main",
                           colorHex: "#1F6E8C", sortOrder: 0,
                           includeInUsable: true, countsAsSavings: false,
                           isLeftoverDestination: true)
-        let revolut = Account(name: "Revolut", note: "Short-term savings",
+        let savings = Account(name: "Savings", note: "Short-term savings",
                               categoryID: category("Savings")?.id, legacyKind: "savings",
                               colorHex: "#7A5EA6", sortOrder: 1,
                               includeInUsable: true, countsAsSavings: true,
-                              expectedAnnualReturn: 0.011, monthlyContribution: 100)
-        let xtb = Account(name: "XTB", note: "Brokerage — long-term investing",
+                              expectedAnnualReturn: 0.01, monthlyContribution: 150)
+        let brokerage = Account(name: "Brokerage", note: "Long-term investing",
                           categoryID: category("Investment")?.id, legacyKind: "investment",
                           colorHex: "#C2703D", sortOrder: 2,
                           includeInUsable: true, countsAsSavings: true,
-                          expectedAnnualReturn: 0.07, monthlyContribution: 100)
-        let edenred = Account(name: "Edenred", note: "Meal card — food only, not spendable cash",
+                          expectedAnnualReturn: 0.06, monthlyContribution: 150)
+        let mealCard = Account(name: "Meal Card",
+                              note: "Food only — not spendable cash",
                               categoryID: category("Restricted")?.id, legacyKind: "restricted",
                               colorHex: "#A34A5E", sortOrder: 3,
                               includeInUsable: false, countsAsSavings: false)
-        for account in [ctt, revolut, xtb, edenred] { context.insert(account) }
+        for account in [current, savings, brokerage, mealCard] { context.insert(account) }
 
+        // Deliberately round, obviously invented figures. Two records share a
+        // date so the same-date ordering behaviour is exercised out of the box.
         let rows: [(Int, Int, Int, Double, Double, Double, Double)] = [
-            (1, 7, 2026, 6285.73, 200.00, 710.85, 268.43),
-            (1, 7, 2026, 6235.73, 250.00, 710.85, 268.43),
-            (2, 7, 2026, 6265.73, 250.00, 710.85, 268.43),
-            (3, 7, 2026, 6265.73, 250.02, 710.85, 268.43),
-            (4, 8, 2026, 6962.35, 350.27, 819.49, 277.63),
+            (1, 3, 2026, 1000, 500, 500, 100),
+            (1, 3, 2026, 1100, 500, 500, 100),
+            (15, 3, 2026, 1100, 700, 600, 100),
+            (1, 4, 2026, 1500, 800, 700, 100),
         ]
         let calendar = Calendar(identifier: .gregorian)
         let seedEpoch = Date(timeIntervalSince1970: 1_750_000_000)
@@ -51,32 +54,31 @@ enum SeedData {
             let record = BalanceRecord(date: calendar.date(from: comps)!,
                                        createdAt: seedEpoch.addingTimeInterval(Double(offset)))
             context.insert(record)
-            record.setAmount(a, for: ctt.id)
-            record.setAmount(b, for: revolut.id)
-            record.setAmount(c, for: xtb.id)
-            record.setAmount(d, for: edenred.id)
+            record.setAmount(a, for: current.id)
+            record.setAmount(b, for: savings.id)
+            record.setAmount(c, for: brokerage.id)
+            record.setAmount(d, for: mealCard.id)
         }
 
-        context.insert(AppSettings(targetNetWorth: 25_000, monthlyNetIncome: 1_117,
-                                   maxMonthlyExpenses: 200, projectionHorizonMonths: 60))
+        context.insert(AppSettings(targetNetWorth: 10_000, monthlyNetIncome: 2_000,
+                                   maxMonthlyExpenses: 500, projectionHorizonMonths: 60))
 
-        // Expenses: the old single 200 € figure, broken into example commitments
-        // that add up to the same monthly total.
+        // Commitments totalling 500 €/month, including a yearly bill so the
+        // frequency normalisation is visible without editing anything.
         let expenseCategories = ExpenseCategory.seedDefaults(into: context)
         func expenseCategory(_ name: String) -> UUID? {
             expenseCategories.first { $0.name == name }?.id
         }
         let seededExpenses: [(String, Double, ExpenseFrequency, String)] = [
-            ("Rent", 90, .monthly, "Housing"),
-            ("Electricity and water", 35, .monthly, "Utilities"),
-            ("Phone", 15, .monthly, "Utilities"),
+            ("Rent", 350, .monthly, "Housing"),
+            ("Phone", 20, .monthly, "Utilities"),
             ("Transport pass", 30, .monthly, "Transport"),
-            ("Streaming", 10, .monthly, "Subscriptions"),
-            ("Home insurance", 240, .yearly, "Housing"),
+            ("Home insurance", 1_200, .yearly, "Housing"),
         ]
         for (index, item) in seededExpenses.enumerated() {
             context.insert(Expense(name: item.0, amount: item.1, frequency: item.2,
-                                   categoryID: expenseCategory(item.3), sortOrder: index))
+                                   categoryID: expenseCategory(item.3),
+                                   accountID: current.id, sortOrder: index))
         }
 
         try? context.save()
@@ -124,6 +126,19 @@ enum SeedData {
                                categoryID: other?.id,
                                sortOrder: 0))
         try? context.save()
+    }
+
+    /// Points expenses written before the paying-account field at the main
+    /// account, so none is left without one.
+    static func migrateExpenseAccounts(_ context: ModelContext) {
+        guard let expenses = try? context.fetch(FetchDescriptor<Expense>()) else { return }
+        guard let fallback = ExpenseService.defaultAccountID(in: context) else { return }
+        var changed = false
+        for expense in expenses where expense.accountID == nil {
+            expense.accountID = fallback
+            changed = true
+        }
+        if changed { try? context.save() }
     }
 
     /// Brings a store created before categories existed up to date: seeds the

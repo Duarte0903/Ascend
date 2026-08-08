@@ -14,35 +14,35 @@ private func parse(_ text: String, _ locale: Locale = pt) -> Double? {
 /// Typing a grouped figure the Portuguese way — dot for thousands, comma for
 /// decimals — used to fail to parse, so the field silently reverted.
 @Test func parsesPortugueseGroupedInput() {
-    #expect(parse("6.285,73") == 6285.73)
+    #expect(parse("1.234,56") == 1234.56)
     #expect(parse("1.234.567,89") == 1234567.89)
     #expect(parse("25.000") == 25000)
 }
 
 @Test func parsesPlainCommaDecimals() {
-    #expect(parse("6285,73") == 6285.73)
-    #expect(parse("350,27") == 350.27)
+    #expect(parse("1234,56") == 1234.56)
+    #expect(parse("820,50") == 820.50)
     #expect(parse("0,5") == 0.5)
 }
 
 /// A dot decimal must keep working — people type both.
 @Test func parsesDotDecimals() {
-    #expect(parse("6285.73") == 6285.73)
+    #expect(parse("1234.56") == 1234.56)
     #expect(parse("0.5") == 0.5)
 }
 
 /// English-style grouping, in case it is pasted in from elsewhere.
 @Test func parsesEnglishGroupedInput() {
-    #expect(parse("6,285.73") == 6285.73)
+    #expect(parse("1,234.56") == 1234.56)
     #expect(parse("1,234,567.89") == 1234567.89)
 }
 
 // MARK: - Formatting artefacts round-tripping back in
 
 @Test func toleratesTheAppsOwnDisplayFormatting() {
-    #expect(parse("8\u{202F}410\u{202F}€") == 8410)
-    #expect(parse("6 285,73 €") == 6285.73)
-    #expect(parse("12,2\u{202F}%") == 12.2)
+    #expect(parse("3\u{202F}100\u{202F}€") == 3100)
+    #expect(parse("1 234,56 €") == 1234.56)
+    #expect(parse("24,0\u{202F}%") == 24.0)
 }
 
 // MARK: - Partial and awkward input
@@ -74,7 +74,7 @@ private func parse(_ text: String, _ locale: Locale = pt) -> Double? {
 // MARK: - Display
 
 @Test func formatsWithCommaDecimalAndNoGrouping() {
-    #expect(NumberText.string(from: 6285.73, decimals: 2, locale: pt) == "6285,73")
+    #expect(NumberText.string(from: 1234.56, decimals: 2, locale: pt) == "1234,56")
     #expect(NumberText.string(from: 25000, decimals: 0, locale: pt) == "25000")
 }
 
@@ -92,7 +92,7 @@ private func parse(_ text: String, _ locale: Locale = pt) -> Double? {
 /// Whole numbers stay clean — no "224,00" padding.
 @Test func displayDropsTrailingZeros() {
     #expect(NumberText.string(from: 224, decimals: 2, locale: pt) == "224")
-    #expect(NumberText.string(from: 1117, decimals: 2, locale: pt) == "1117")
+    #expect(NumberText.string(from: 2000, decimals: 2, locale: pt) == "2000")
     #expect(NumberText.string(from: 0, decimals: 2, locale: pt) == "0")
 }
 
@@ -101,7 +101,7 @@ private func parse(_ text: String, _ locale: Locale = pt) -> Double? {
 /// decimals setting a field might be configured with.
 @Test func commitCycleIsStableAtEveryDecimalsSetting() {
     for decimals in [0, 2] {
-        for typed in ["224,40", "224,4", "1117,50", "6285,73", "0,05"] {
+        for typed in ["224,40", "224,4", "1500,50", "1234,56", "0,05"] {
             let first = NumberText.double(from: typed, locale: pt)
             #expect(first != nil, "'\(typed)' failed to parse")
             let shown = NumberText.string(from: first ?? 0, decimals: decimals, locale: pt)
@@ -115,7 +115,7 @@ private func parse(_ text: String, _ locale: Locale = pt) -> Double? {
 /// Whatever is displayed must parse back to the same number, or committing a
 /// field twice would drift.
 @Test func displayRoundTripsThroughParsing() {
-    for value in [0.0, 0.5, 350.27, 6285.73, 25000, 1234567.89, -50.25] {
+    for value in [0.0, 0.5, 820.50, 1234.56, 25000, 1234567.89, -50.25] {
         let shown = NumberText.string(from: value, decimals: 2, locale: pt)
         let back = parse(shown)
         #expect(back != nil, "could not re-parse '\(shown)'")

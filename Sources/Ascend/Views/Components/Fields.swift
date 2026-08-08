@@ -6,7 +6,7 @@ import SwiftUI
 struct MoneyField: View {
     @Binding var value: Double
     var decimals: Int = 2
-    var width: CGFloat = 108
+    var width: CGFloat = Theme.Size.field
     var font: Font = .figure(13, weight: .medium)
     /// Rendered inside the field's box, so a unit never breaks column alignment.
     var suffix: String?
@@ -44,8 +44,8 @@ struct MoneyField: View {
                     .foregroundStyle(Color.ftInkTertiary)
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .padding(.horizontal, Theme.Size.fieldPaddingH)
+        .padding(.vertical, Theme.Size.fieldPaddingV)
         .frame(width: width)
         .background(Color.ftSurface, in: shape)
         .overlay(shape.strokeBorder(border, lineWidth: focused ? 1.5 : 1))
@@ -82,10 +82,10 @@ struct MoneyField: View {
 
 /// Parsing and display for editable figures.
 ///
-/// Accepts every form a person actually types: `6285,73`, `6285.73`, and
-/// grouped input in either convention — `6.285,73` or `6,285.73`. Naive
-/// comma-to-dot substitution cannot do this: it turns `6.285,73` into
-/// `6.285.73`, which fails to parse and makes the field discard the edit.
+/// Accepts every form a person actually types: `1234,56`, `1234.56`, and
+/// grouped input in either convention — `1.234,56` or `1,234.56`. Naive
+/// comma-to-dot substitution cannot do this: it turns `1.234,56` into
+/// `1.234.56`, which fails to parse and makes the field discard the edit.
 enum NumberText {
     /// `decimals` is a **maximum**, not a fixed width. Padding to a fixed width
     /// is what destroyed cents: a field rendering 224,4 as "224" reparses as
@@ -163,7 +163,7 @@ enum NumberText {
 /// Commits on Enter or focus loss, so a half-typed name is never validated.
 struct NameField: View {
     let name: String
-    var width: CGFloat = 200
+    var width: CGFloat = Theme.Size.name
     var onCommit: (String) -> Void
 
     @FocusState private var focused: Bool
@@ -184,8 +184,8 @@ struct NameField: View {
             .font(.system(size: 14.5, weight: .semibold))
             .foregroundStyle(Color.ftInk)
             .focused($focused)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Theme.Size.fieldPaddingH)
+            .padding(.vertical, Theme.Size.fieldPaddingV)
             .frame(width: width, alignment: .leading)
             .background(focused || hovering ? Color.ftSurfaceAlt : .clear, in: shape)
             .overlay(shape.strokeBorder(
@@ -208,7 +208,7 @@ struct NameField: View {
 /// so a description never competes with the account's name or balance.
 struct DescriptionField: View {
     let note: String
-    var width: CGFloat = 320
+    var width: CGFloat = Theme.Size.description
     var onCommit: (String) -> Void
 
     @FocusState private var focused: Bool
@@ -226,8 +226,8 @@ struct DescriptionField: View {
             .foregroundStyle(focused ? Color.ftInk : Color.ftInkSecondary)
             .focused($focused)
             .onSubmit { commitIfChanged() }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, Theme.Size.fieldPaddingH)
+            .padding(.vertical, Theme.Size.fieldPaddingV)
             .frame(width: width, alignment: .leading)
             .background(focused || hovering ? Color.ftSurfaceAlt : .clear, in: shape)
             .overlay(shape.strokeBorder(
@@ -252,7 +252,7 @@ struct DescriptionField: View {
 struct IntField: View {
     @Binding var value: Int
     var range: ClosedRange<Int> = 1...600
-    var width: CGFloat = 108
+    var width: CGFloat = Theme.Size.field
 
     @FocusState private var focused: Bool
     @State private var hovering = false
@@ -272,8 +272,8 @@ struct IntField: View {
             .foregroundStyle(Color.ftInk)
             .focused($focused)
             .onSubmit { commit() }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, Theme.Size.fieldPaddingH)
+            .padding(.vertical, Theme.Size.fieldPaddingV)
             .frame(width: width)
             .background(Color.ftSurface, in: shape)
             .overlay(shape.strokeBorder(
@@ -317,7 +317,7 @@ struct DerivedText: View {
 struct HeroField: View {
     @Binding var value: Double
     var suffix: String = "€"
-    var width: CGFloat = 190
+    var width: CGFloat = Theme.Size.heroField
 
     @FocusState private var focused: Bool
     @State private var hovering = false

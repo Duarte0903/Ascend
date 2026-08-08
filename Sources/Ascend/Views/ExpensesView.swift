@@ -6,10 +6,13 @@ struct ExpensesView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Expense.sortOrder) private var expenses: [Expense]
     @Query(sort: \ExpenseCategory.sortOrder) private var categories: [ExpenseCategory]
+    @Query(sort: \Account.sortOrder) private var accounts: [Account]
 
     @State private var errorMessage: String?
     @State private var showingCategories = false
     @State private var hoveredRow: UUID?
+
+    private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
     private var metrics: ExpenseMetrics {
         ExpenseMetrics.compute(
@@ -19,22 +22,24 @@ struct ExpensesView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                Callout(text: "These are your recurring commitments. Their monthly total is what Projections uses as monthly expenses — there is no separate figure to keep in sync.")
+        FillingScreen {
+            Callout(text: "These are your recurring commitments. Their monthly total is what Projections uses as monthly expenses — there is no separate figure to keep in sync.")
 
-                if expenses.isEmpty {
-                    ContentUnavailableView("No expenses yet",
-                                           systemImage: "creditcard",
-                                           description: Text("Add what you pay every month to make projections realistic."))
-                        .frame(height: 300)
+            if expenses.isEmpty {
+                ContentUnavailableView("No expenses yet",
+                                       systemImage: "creditcard",
+                                       description: Text("Add what you pay every month to make projections realistic."))
+                    .frame(maxWidth: .infinity)
+                    .fillsHeight()
+            } else {
+                hero
+                table
+                if metrics.byCategory.count > 1 {
+                    breakdown.fillsHeight(minimum: 260)
                 } else {
-                    hero
-                    table
-                    if metrics.byCategory.count > 1 { breakdown }
+                    Spacer(minLength: 0)
                 }
             }
-            .padding(Theme.screenPadding)
         }
         .toolbar {
             ToolbarItemGroup {
@@ -100,66 +105,67 @@ struct ExpensesView: View {
     // MARK: - Table
 
     private var table: some View {
+        // The name column flexes so the table fills the window at any width,
+        // while every numeric column keeps the same width as the field in it.
         CardSection("Commitments", subtitle: "Amounts are as billed; the monthly column normalises them") {
-            ScrollView(.horizontal, showsIndicators: true) {
-                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 0) {
-                    GridRow {
-                        Text("Name").frame(width: 190, alignment: .leading)
-                        Text("Amount").frame(width: 104, alignment: .trailing)
-                        Text("Frequency").frame(width: 104, alignment: .leading)
-                        Text("Category").frame(width: 136, alignment: .leading)
-                        Text("Per month").frame(width: 96, alignment: .trailing)
-                        Text("Per year").frame(width: 100, alignment: .trailing)
-                        Text("Active").frame(width: 52, alignment: .center)
-                        Color.clear.frame(width: 22)
-                    }
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(Color.ftInkTertiary)
-                    .padding(.bottom, 8)
-
-                    Divider().gridCellUnsizedAxes(.horizontal)
-
-                    ForEach(Array(expenses.enumerated()), id: \.element.id) { index, expense in
-                        row(expense)
-                        if index < expenses.count - 1 {
-                            Divider().gridCellUnsizedAxes(.horizontal).opacity(0.6)
-                        }
-                    }
-
-                    Divider().gridCellUnsizedAxes(.horizontal)
-
-                    GridRow {
-                        Text("Total").font(.system(size: 12.5, weight: .semibold))
-                            .frame(width: 190, alignment: .leading)
-                        Text("").frame(width: 104)
-                        Text("").frame(width: 104)
-                        Text("").frame(width: 136)
-                        DerivedText(text: Money.currency(metrics.monthlyTotal, decimals: 2),
-                                    width: 96, emphasis: true)
-                        DerivedText(text: Money.currency(metrics.yearlyTotal, decimals: 2),
-                                    width: 100, emphasis: true)
-                        Text("").frame(width: 52)
-                        Color.clear.frame(width: 22)
-                    }
-                    .padding(.top, 6)
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 0) {
+                GridRow {
+                    Text("Name").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Amount").frame(width: Theme.Size.field, alignment: .trailing)
+                    Text("Frequency").frame(width: Theme.Size.picker, alignment: .leading)
+                    Text("Category").frame(width: Theme.Size.picker, alignment: .leading)
+                    Text("Paid from").frame(width: Theme.Size.picker, alignment: .leading)
+                    Text("Per month").frame(width: Theme.Size.field, alignment: .trailing)
+                    Text("Per year").frame(width: Theme.Size.field, alignment: .trailing)
+                    Text("Active").frame(width: Theme.Size.control, alignment: .center)
+                    Color.clear.frame(width: Theme.Size.iconButton)
                 }
-                .padding(Theme.cardPadding)
+                .font(.system(size: 10.5, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(Color.ftInkTertiary)
+                .padding(.bottom, 8)
+
+                Divider().gridCellUnsizedAxes(.horizontal)
+
+                ForEach(Array(expenses.enumerated()), id: \.element.id) { index, expense in
+                    row(expense)
+                    if index < expenses.count - 1 {
+                        Divider().gridCellUnsizedAxes(.horizontal).opacity(0.6)
+                    }
+                }
+
+                Divider().gridCellUnsizedAxes(.horizontal)
+
+                GridRow {
+                    Text("Total").font(.system(size: 12.5, weight: .semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Color.clear.frame(width: Theme.Size.field, height: 1)
+                    Color.clear.frame(width: Theme.Size.picker, height: 1)
+                    Color.clear.frame(width: Theme.Size.picker, height: 1)
+                    Color.clear.frame(width: Theme.Size.picker, height: 1)
+                    DerivedText(text: Money.currency(metrics.monthlyTotal, decimals: 2),
+                                width: Theme.Size.field, emphasis: true)
+                    DerivedText(text: Money.currency(metrics.yearlyTotal, decimals: 2),
+                                width: Theme.Size.field, emphasis: true)
+                    Color.clear.frame(width: Theme.Size.control, height: 1)
+                    Color.clear.frame(width: Theme.Size.iconButton)
+                }
+                .padding(.top, 6)
             }
         }
     }
 
     private func row(_ expense: Expense) -> some View {
         GridRow {
-            NameField(name: expense.name, width: 190) { newValue in
+            NameField(name: expense.name) { newValue in
                 do { try ExpenseService.rename(expense, to: newValue, in: context) }
                 catch { errorMessage = error.localizedDescription }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             MoneyField(value: Binding(
                 get: { expense.amount },
-                set: { expense.amount = max(0, $0); try? context.save() }),
-                width: 104)
+                set: { expense.amount = max(0, $0); try? context.save() }))
 
             Picker("", selection: Binding(
                 get: { expense.frequency },
@@ -168,7 +174,7 @@ struct ExpensesView: View {
             }
             .labelsHidden()
             .controlSize(.small)
-            .frame(width: 104)
+            .frame(width: Theme.Size.picker)
 
             Picker("", selection: Binding(
                 get: { expense.categoryID },
@@ -182,14 +188,29 @@ struct ExpensesView: View {
             }
             .labelsHidden()
             .controlSize(.small)
-            .frame(width: 136)
+            .frame(width: Theme.Size.picker)
+
+            Picker("", selection: Binding(
+                get: { expense.accountID },
+                set: { newID in
+                    ExpenseService.assign(expense,
+                                          toAccount: accounts.first { $0.id == newID },
+                                          in: context)
+                })) {
+                Text("None").tag(Optional<UUID>.none)
+                ForEach(activeAccounts) { Text($0.name).tag(Optional($0.id)) }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: Theme.Size.picker)
+            .help("The account this is paid from")
 
             DerivedText(text: Money.currency(expense.monthlyAmount, decimals: 2),
-                        width: 96,
+                        width: Theme.Size.field,
                         tint: expense.isActive ? nil : Color.ftInkTertiary)
 
             DerivedText(text: Money.currency(expense.yearlyAmount, decimals: 2),
-                        width: 100,
+                        width: Theme.Size.field,
                         tint: expense.isActive ? nil : Color.ftInkTertiary)
 
             Toggle("", isOn: Binding(
@@ -198,7 +219,7 @@ struct ExpensesView: View {
                 .labelsHidden()
                 .toggleStyle(.checkbox)
                 .controlSize(.small)
-                .frame(width: 52, alignment: .center)
+                .frame(width: Theme.Size.control, alignment: .center)
 
             Button {
                 ExpenseService.delete(expense, in: context)
@@ -211,7 +232,7 @@ struct ExpensesView: View {
             }
             .buttonStyle(.plain)
             .help("Delete this expense")
-            .frame(width: 22)
+            .frame(width: Theme.Size.iconButton)
         }
         .padding(.vertical, 5)
         .background(hoveredRow == expense.id ? Color.ftSurfaceAlt : .clear)
@@ -221,8 +242,7 @@ struct ExpensesView: View {
     // MARK: - Breakdown
 
     private var breakdown: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: Theme.gap)],
-                  spacing: Theme.gap) {
+        HStack(alignment: .top, spacing: Theme.gap) {
             CardSection("Where it goes") {
                 Chart(metrics.byCategory) { slice in
                     SectorMark(angle: .value("Amount", slice.monthlyAmount),
@@ -233,8 +253,9 @@ struct ExpensesView: View {
                 }
                 .chartForegroundStyleScale(range: metrics.byCategory.map { colour(for: $0) })
                 .chartLegend(.hidden)
-                .frame(height: 240)
+                .frame(maxHeight: .infinity)
             }
+            .fillsHeight(minimum: 260)
 
             CardSection("By category") {
                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 9) {
@@ -254,7 +275,7 @@ struct ExpensesView: View {
                             HStack(spacing: 9) {
                                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                                     .fill(colour(for: slice))
-                                    .frame(width: 9, height: 9)
+                                    .frame(width: Theme.Size.dot, height: Theme.Size.dot)
                                 Text(slice.name).font(.system(size: 12.5))
                             }
                             DerivedText(text: Money.currency(slice.monthlyAmount, decimals: 2))
@@ -262,7 +283,11 @@ struct ExpensesView: View {
                         }
                     }
                 }
+                // Pushes the card's spare height below the rows, so this card
+                // matches the chart beside it instead of stopping short.
+                Spacer(minLength: 0)
             }
+            .fillsHeight(minimum: 260)
         }
     }
 
@@ -299,7 +324,7 @@ struct ExpensesView: View {
                     }
                 }
             }
-            .frame(height: 240)
+            .frame(height: 300)
             .background(Color.ftSurface)
 
             Divider()
@@ -308,7 +333,7 @@ struct ExpensesView: View {
                 Button {
                     addCategory()
                 } label: {
-                    Image(systemName: "plus").frame(width: 18)
+                    Image(systemName: "plus").frame(width: Theme.Size.iconButton)
                 }
                 .buttonStyle(.borderless)
                 .help("Add a category")
@@ -322,7 +347,7 @@ struct ExpensesView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 520)
+        .frame(width: Theme.Size.sheetNarrow)
         .background(Color.ftCanvas)
     }
 
@@ -334,7 +359,7 @@ struct ExpensesView: View {
                 set: { category.colorHex = $0.hexString; try? context.save() }))
                 .labelsHidden()
 
-            NameField(name: category.name, width: 220) { newValue in
+            NameField(name: category.name) { newValue in
                 do { try ExpenseService.renameCategory(category, to: newValue, in: context) }
                 catch { errorMessage = error.localizedDescription }
             }

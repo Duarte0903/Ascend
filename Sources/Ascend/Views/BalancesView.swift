@@ -79,22 +79,24 @@ struct BalancesView: View {
 
     private var headerRow: some View {
         GridRow {
-            Text("Date").frame(width: 108, alignment: .leading)
+            Text("Date").frame(width: Theme.Size.field, alignment: .leading)
             ForEach(activeAccounts) { account in
                 HStack(spacing: 6) {
-                    Circle().fill(Color(hex: account.colorHex)).frame(width: 7, height: 7)
+                    Circle().fill(Color(hex: account.colorHex))
+                        .frame(width: Theme.Size.dot - 2, height: Theme.Size.dot - 2)
                     Text(account.name)
                 }
-                .frame(width: 112, alignment: .trailing)
+                .frame(width: Theme.Size.field, alignment: .trailing)
                 // Description surfaces on hover rather than crowding the header.
                 .help(account.note.isEmpty ? account.name : account.note)
             }
-            Text("Total").frame(width: 96)
-            Text("Usable").frame(width: 96)
-            Text("Change").frame(width: 92)
-            Text("Change %").frame(width: 82)
-            Text("Savings rate").frame(width: 92)
-            Color.clear.frame(width: 22)
+            Text("Total").frame(width: Theme.Size.field, alignment: .trailing)
+            Text("Usable").frame(width: Theme.Size.field, alignment: .trailing)
+            Text("Change").frame(width: Theme.Size.field, alignment: .trailing)
+            Text("Change %").frame(width: Theme.Size.fieldSmall, alignment: .trailing)
+            Text("Savings rate").frame(width: Theme.Size.fieldSmall, alignment: .trailing)
+            Color.clear.frame(width: Theme.Size.iconButton)
+            Spacer(minLength: 0)
         }
         .font(.system(size: 10.5, weight: .semibold))
         .tracking(0.5)
@@ -112,22 +114,23 @@ struct BalancesView: View {
                     displayedComponents: .date)
                     .labelsHidden()
                     .datePickerStyle(.field)
-                    .frame(width: 108)
+                    .frame(width: Theme.Size.field)
 
                 ForEach(activeAccounts) { account in
                     MoneyField(value: Binding(
                         get: { record.amount(for: account.id) },
-                        set: { record.setAmount($0, for: account.id); try? context.save() }),
-                        width: 112)
+                        set: { record.setAmount($0, for: account.id); try? context.save() }))
                 }
 
-                DerivedText(text: Money.currency(row.total), width: 96, emphasis: true)
-                DerivedText(text: Money.currency(row.usable), width: 96)
-                DerivedText(text: signed(row.changeAmount), width: 92,
+                DerivedText(text: Money.currency(row.total), width: Theme.Size.field,
+                            emphasis: true)
+                DerivedText(text: Money.currency(row.usable), width: Theme.Size.field)
+                DerivedText(text: signed(row.changeAmount), width: Theme.Size.field,
                             tint: tint(for: row.changeAmount))
-                DerivedText(text: signed(row.changePercent, percent: true), width: 82,
+                DerivedText(text: signed(row.changePercent, percent: true),
+                            width: Theme.Size.fieldSmall,
                             tint: tint(for: row.changePercent))
-                DerivedText(text: Money.percent(row.savingsRate), width: 92,
+                DerivedText(text: Money.percent(row.savingsRate), width: Theme.Size.fieldSmall,
                             tint: (row.savingsRate ?? 0) > 0 ? .ftPositive : nil)
 
                 Button {
@@ -140,7 +143,9 @@ struct BalancesView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Delete this record")
-                .frame(width: 22)
+                .frame(width: Theme.Size.iconButton)
+
+                Spacer(minLength: 0)
             }
             .padding(.vertical, 5)
             .background(hoveredRow == row.id ? Color.ftSurfaceAlt : .clear)

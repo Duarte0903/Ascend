@@ -21,8 +21,8 @@ import SwiftData
         settings: SeedData.settings(in: target))
     let derived = LedgerEngine.derive(input)
     let metrics = DashboardMetrics.compute(records: derived)
-    #expect(abs(metrics.currentNetWorth! - 8409.74) < 0.005)
-    #expect(abs(metrics.averageSavingsRate! - 0.008642763) < 0.0000001)
+    #expect(abs(metrics.currentNetWorth! - 3100) < 0.005)
+    #expect(abs(metrics.averageSavingsRate! - 0.0721212121) < 0.0000001)
     #expect(try target.fetch(FetchDescriptor<Account>()).count == 4)
 }
 
@@ -44,9 +44,9 @@ import SwiftData
         records: try target.fetch(FetchDescriptor<BalanceRecord>()),
         settings: SeedData.settings(in: target))
     let derived = LedgerEngine.derive(input)
-    #expect(abs(derived[0].total - 7465.01) < 0.005)
-    #expect(abs(derived[1].savingsRate! - 0.0066979147) < 0.0000001)
-    #expect(abs(derived[4].savingsRate! - 0.0278704688) < 0.0000001)
+    #expect(abs(derived[0].total - 2100) < 0.005)
+    #expect(abs(derived[1].changeAmount! - 100) < 0.0000001)
+    #expect(abs(derived[3].savingsRate! - 0.08) < 0.0000001)
 }
 
 @MainActor
@@ -64,15 +64,15 @@ import SwiftData
                                   colorHex: "#123456", in: target)
     try BackupService.restore(from: data, into: target)
     #expect(try target.fetch(FetchDescriptor<Account>()).count == 4)
-    #expect(try target.fetch(FetchDescriptor<BalanceRecord>()).count == 5)
+    #expect(try target.fetch(FetchDescriptor<BalanceRecord>()).count == 4)
 }
 
 @MainActor
 @Test func backupPreservesAccountFlagsAndArchivedState() throws {
     let source = try inMemoryContext()
     SeedData.seedIfNeeded(source)
-    let edenred = try source.fetch(FetchDescriptor<Account>()).first { $0.name == "Edenred" }!
-    try AccountService.archive(edenred, in: source)
+    let mealCard = try source.fetch(FetchDescriptor<Account>()).first { $0.name == "Meal Card" }!
+    try AccountService.archive(mealCard, in: source)
 
     let data = try BackupService.export(
         accounts: try source.fetch(FetchDescriptor<Account>()),
@@ -82,9 +82,9 @@ import SwiftData
     let target = try inMemoryContext()
     try BackupService.restore(from: data, into: target)
     let restored = try target.fetch(FetchDescriptor<Account>())
-    #expect(restored.first { $0.name == "Edenred" }?.isArchived == true)
-    #expect(restored.first { $0.name == "Edenred" }?.includeInUsable == false)
-    #expect(restored.first { $0.name == "XTB" }?.expectedAnnualReturn == 0.07)
+    #expect(restored.first { $0.name == "Meal Card" }?.isArchived == true)
+    #expect(restored.first { $0.name == "Meal Card" }?.includeInUsable == false)
+    #expect(restored.first { $0.name == "Brokerage" }?.expectedAnnualReturn == 0.06)
     #expect(restored.filter(\.isLeftoverDestination).count == 1)
-    #expect(SeedData.settings(in: target).monthlyNetIncome == 1_117)
+    #expect(SeedData.settings(in: target).monthlyNetIncome == 2_000)
 }

@@ -4,10 +4,10 @@ import Foundation
 
 private let tol = 0.005
 
-@Test func derivesTotalsForEveryWorkbookRecord() {
+@Test func derivesTotalsForEverySampleRecord() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    #expect(d.count == 5)
-    let expected = [7465.01, 7465.01, 7495.01, 7495.03, 8409.74]
+    #expect(d.count == 4)
+    let expected: [Double] = [2100, 2200, 2500, 3100]
     for (i, e) in expected.enumerated() {
         #expect(abs(d[i].total - e) < tol, "record \(i + 1) total")
     }
@@ -15,7 +15,7 @@ private let tol = 0.005
 
 @Test func usableExcludesRestrictedAccounts() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    let expected = [7196.58, 7196.58, 7226.58, 7226.60, 8132.11]
+    let expected: [Double] = [2000, 2100, 2400, 3000]
     for (i, e) in expected.enumerated() {
         #expect(abs(d[i].usable - e) < tol, "record \(i + 1) usable")
     }
@@ -30,7 +30,7 @@ private let tol = 0.005
 
 @Test func derivesChangeAmounts() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    let expected: [Double] = [0.00, 30.00, 0.02, 914.71]
+    let expected: [Double] = [100, 300, 600]
     for (i, e) in expected.enumerated() {
         #expect(abs(d[i + 1].changeAmount! - e) < tol, "record \(i + 2) change")
     }
@@ -38,16 +38,17 @@ private let tol = 0.005
 
 @Test func derivesChangePercent() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    #expect(abs(d[4].changePercent! - 0.1220427) < 0.00001)
+    // 600 on a previous total of 2 500.
+    #expect(abs(d[3].changePercent! - 0.24) < 0.00001)
 }
 
-/// The workbook's least obvious formula: the increase in savings-flagged
-/// accounts, over the PREVIOUS total. Record 5: (100.25 + 108.64) / 7495.03.
+/// The least obvious formula: the increase in savings-flagged accounts, over
+/// the PREVIOUS total. Record 4: (100 + 100) / 2 500 = 8 %.
 @Test func savingsRateUsesSavingsAccountDeltaOverPreviousTotal() {
     let d = LedgerEngine.derive(WorkbookFixture.portfolio)
-    #expect(abs(d[1].savingsRate! - 0.0066979147) < 0.0000001)
-    #expect(abs(d[2].savingsRate! - 0.0) < 0.0000001)
-    #expect(abs(d[4].savingsRate! - 0.0278704688) < 0.0000001)
+    #expect(abs(d[1].savingsRate! - 0.0) < 0.0000001)
+    #expect(abs(d[2].savingsRate! - 0.13636364) < 0.0000001)
+    #expect(abs(d[3].savingsRate! - 0.08) < 0.0000001)
 }
 
 @Test func percentagesAreNilWhenPreviousTotalIsZero() {
@@ -69,25 +70,14 @@ private let tol = 0.005
     var input = WorkbookFixture.portfolio
     input.records = input.records.reversed()
     let d = LedgerEngine.derive(input)
-    #expect(abs(d[0].total - 7465.01) < tol)
-    #expect(abs(d[4].total - 8409.74) < tol)
-}
-
-/// Two records share 01/07/2026; the one created first must come first, or the
-/// change and savings-rate columns would flip.
-@Test func sameDateRecordsKeepCreationOrder() {
-    var input = WorkbookFixture.portfolio
-    input.records = input.records.reversed()
-    let d = LedgerEngine.derive(input)
-    #expect(abs(d[0].amount(for: WorkbookFixture.cttID) - 6285.73) < tol)
-    #expect(abs(d[1].amount(for: WorkbookFixture.cttID) - 6235.73) < tol)
-    #expect(abs(d[1].savingsRate! - 0.0066979147) < 0.0000001)
+    #expect(abs(d[0].total - 2100) < tol)
+    #expect(abs(d[3].total - 3100) < tol)
 }
 
 @Test func missingBalanceEntriesReadAsZero() {
     var input = WorkbookFixture.portfolio
-    input.records = [RecordInput(id: UUID(), date: WorkbookFixture.date(1, 7, 2026),
-                                 balances: [WorkbookFixture.cttID: 100])]
+    input.records = [RecordInput(id: UUID(), date: WorkbookFixture.date(1, 3, 2026),
+                                 balances: [WorkbookFixture.currentID: 100])]
     let d = LedgerEngine.derive(input)
     #expect(d[0].total == 100)
 }

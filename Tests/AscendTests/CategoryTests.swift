@@ -123,7 +123,7 @@ private func categories(_ context: ModelContext) throws -> [AccountCategory] {
         PortfolioStore.input(accounts: accounts, records: records, settings: settings)).last!
 
     let main = try categories(context).first { $0.name == "Main" }!
-    AccountService.assign(accounts.first { $0.name == "XTB" }!, to: main, in: context)
+    AccountService.assign(accounts.first { $0.name == "Brokerage" }!, to: main, in: context)
 
     let after = LedgerEngine.derive(
         PortfolioStore.input(accounts: try context.fetch(FetchDescriptor<Account>()),
@@ -171,13 +171,13 @@ private func categories(_ context: ModelContext) throws -> [AccountCategory] {
     let accounts = try context.fetch(FetchDescriptor<Account>())
     #expect(accounts.allSatisfy { !$0.note.isEmpty })
 
-    let edenred = accounts.first { $0.name == "Edenred" }!
-    #expect(edenred.note.contains("Food only") || edenred.note.contains("food only"))
+    let mealCard = accounts.first { $0.name == "Meal Card" }!
+    #expect(mealCard.note.contains("Food only") || mealCard.note.contains("food only"))
 
-    edenred.note = "Updated note"
+    mealCard.note = "Updated note"
     try context.save()
     #expect(try context.fetch(FetchDescriptor<Account>())
-        .first { $0.name == "Edenred" }?.note == "Updated note")
+        .first { $0.name == "Meal Card" }?.note == "Updated note")
 }
 
 @MainActor
@@ -203,6 +203,6 @@ private func categories(_ context: ModelContext) throws -> [AccountCategory] {
         .first { $0.name == "Crypto" }?.defaultAnnualReturn == 0.15)
 
     let restored = try target.fetch(FetchDescriptor<Account>())
-    #expect(restored.first { $0.name == "XTB" }?.note.isEmpty == false)
+    #expect(restored.first { $0.name == "Brokerage" }?.note.isEmpty == false)
     #expect(restored.allSatisfy { $0.categoryID != nil })
 }

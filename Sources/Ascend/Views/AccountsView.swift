@@ -115,7 +115,7 @@ struct AccountsView: View {
                 Button {
                     addType()
                 } label: {
-                    Image(systemName: "plus").frame(width: 18)
+                    Image(systemName: "plus").frame(width: Theme.Size.iconButton)
                 }
                 .buttonStyle(.borderless)
                 .help("Add a type")
@@ -133,7 +133,7 @@ struct AccountsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 620)
+        .frame(width: Theme.Size.sheetWide)
         .background(Color.ftCanvas)
     }
 
@@ -149,11 +149,11 @@ struct AccountsView: View {
 
     private var typeTableHeader: some View {
         HStack(spacing: 12) {
-            Text("Name").frame(width: 176, alignment: .leading)
-            Text("Usable").frame(width: 54)
-            Text("Savings").frame(width: 58)
-            Text("Return").frame(width: 86, alignment: .trailing)
-            Text("Used by").frame(width: 74, alignment: .trailing)
+            Text("Name").frame(width: Theme.Size.name, alignment: .leading)
+            Text("Usable").frame(width: Theme.Size.control)
+            Text("Savings").frame(width: Theme.Size.control)
+            Text("Return").frame(width: Theme.Size.fieldSmall, alignment: .trailing)
+            Text("Used by").frame(width: Theme.Size.control, alignment: .trailing)
             Spacer(minLength: 0)
         }
         .font(.system(size: 10.5, weight: .semibold))
@@ -166,7 +166,7 @@ struct AccountsView: View {
     private func typeRow(_ category: AccountCategory) -> some View {
         let inUse = AccountService.accountsUsing(category, accounts: accounts)
         return HStack(spacing: 12) {
-            NameField(name: category.name, width: 176) { newValue in
+            NameField(name: category.name) { newValue in
                 do { try AccountService.renameCategory(category, to: newValue, in: context) }
                 catch { errorMessage = error.localizedDescription }
             }
@@ -175,24 +175,24 @@ struct AccountsView: View {
                 get: { category.defaultIncludeInUsable },
                 set: { category.defaultIncludeInUsable = $0; try? context.save() }))
                 .labelsHidden()
-                .frame(width: 54)
+                .frame(width: Theme.Size.control)
 
             Toggle("", isOn: Binding(
                 get: { category.defaultCountsAsSavings },
                 set: { category.defaultCountsAsSavings = $0; try? context.save() }))
                 .labelsHidden()
-                .frame(width: 58)
+                .frame(width: Theme.Size.control)
 
             MoneyField(value: Binding(
                 get: { category.defaultAnnualReturn * 100 },
                 set: { category.defaultAnnualReturn = $0 / 100; try? context.save() }),
-                decimals: 2, width: 86, suffix: "%")
+                decimals: 2, width: Theme.Size.fieldSmall, suffix: "%")
 
             Text(inUse == 0 ? "—" : "\(inUse)")
                 .font(.figure(12.5))
                 .monospacedDigit()
                 .foregroundStyle(inUse == 0 ? Color.ftInkTertiary : Color.ftInkSecondary)
-                .frame(width: 74, alignment: .trailing)
+                .frame(width: Theme.Size.control, alignment: .trailing)
 
             Button {
                 do {
@@ -241,7 +241,7 @@ struct AccountsView: View {
             // follow the card's radius instead of pinching into a sliver.
             Rectangle()
                 .fill(Color(hex: account.colorHex))
-                .frame(width: 4)
+                .frame(width: Theme.Size.stripe)
 
             VStack(alignment: .leading, spacing: 0) {
                 identityRow(account)
@@ -351,7 +351,7 @@ struct AccountsView: View {
                         MoneyField(value: Binding(
                             get: { account.monthlyContribution },
                             set: { account.monthlyContribution = max(0, $0); try? context.save() }),
-                            decimals: 2, width: 96, suffix: "€")
+                            decimals: 2, width: Theme.Size.field, suffix: "€")
                             .gridColumnAlignment(.trailing)
                     }
                     GridRow {
@@ -361,7 +361,7 @@ struct AccountsView: View {
                         MoneyField(value: Binding(
                             get: { account.expectedAnnualReturn * 100 },
                             set: { account.expectedAnnualReturn = $0 / 100; try? context.save() }),
-                            decimals: 2, width: 96, suffix: "%")
+                            decimals: 2, width: Theme.Size.field, suffix: "%")
                             .gridColumnAlignment(.trailing)
                     }
                 }
@@ -429,7 +429,7 @@ struct AccountsView: View {
                 ForEach(archived) { account in
                     HStack(spacing: 10) {
                         Circle().fill(Color(hex: account.colorHex).opacity(0.5))
-                            .frame(width: 9, height: 9)
+                            .frame(width: Theme.Size.dot, height: Theme.Size.dot)
                         Text(account.name)
                             .font(.system(size: 13))
                             .foregroundStyle(Color.ftInkSecondary)
@@ -458,9 +458,9 @@ struct AccountsView: View {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
                 GridRow {
                     Text("Name").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
-                    TextField("e.g. Trade Republic", text: $newName)
+                    TextField("e.g. Pension", text: $newName)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 240)
+                        .frame(width: Theme.Size.nameWide)
                 }
                 GridRow {
                     Text("Type").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
@@ -468,14 +468,14 @@ struct AccountsView: View {
                         ForEach(categories) { Text($0.name).tag(Optional($0.id)) }
                     }
                     .labelsHidden()
-                    .frame(width: 240)
+                    .frame(width: Theme.Size.nameWide)
                 }
                 GridRow {
                     Text("Description").font(.system(size: 12.5))
                         .foregroundStyle(Color.ftInkSecondary)
                     TextField("What is this account for?", text: $newNote)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 240)
+                        .frame(width: Theme.Size.nameWide)
                 }
                 GridRow {
                     Text("Colour").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
@@ -486,7 +486,7 @@ struct AccountsView: View {
                             } label: {
                                 Circle()
                                     .fill(Color(hex: hex))
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: Theme.Size.iconButton - 4, height: Theme.Size.iconButton - 4)
                                     .overlay(Circle().strokeBorder(
                                         Color.ftInk.opacity(newColor.hexString == hex ? 0.55 : 0),
                                         lineWidth: 2))
@@ -509,7 +509,7 @@ struct AccountsView: View {
             }
         }
         .padding(22)
-        .frame(width: 460)
+        .frame(width: Theme.Size.sheetNarrow)
     }
 
     private var kindExplanation: String {

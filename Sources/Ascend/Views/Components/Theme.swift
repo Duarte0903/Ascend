@@ -14,6 +14,42 @@ enum Theme {
     /// Default palette offered to new accounts, in order.
     static let accountPalette = ["#1F6E8C", "#7A5EA6", "#C2703D", "#A34A5E",
                                  "#3E7C59", "#8C6239", "#5B6C9B", "#96566F"]
+
+    /// The one place control sizes are decided.
+    ///
+    /// Table columns reuse the same widths as the fields that sit in them, so a
+    /// header, its input rows and its total line up without per-screen fiddling.
+    /// Every standard field also shares padding, which is what makes fields in
+    /// one row the same height.
+    enum Size {
+        /// Money and other number inputs, and the derived columns beside them.
+        static let field: CGFloat = 112
+        /// Percentages and compact figures.
+        static let fieldSmall: CGFloat = 96
+        /// Menu pickers — wide enough for a category or frequency name.
+        static let picker: CGFloat = 136
+        /// Inline, editable names.
+        static let name: CGFloat = 200
+        /// Text fields inside a sheet, where there is more room.
+        static let nameWide: CGFloat = 240
+        static let description: CGFloat = 320
+        static let heroField: CGFloat = 200
+        /// Toggle and checkbox columns.
+        static let control: CGFloat = 56
+        /// Borderless icon buttons: delete, reorder.
+        static let iconButton: CGFloat = 24
+        /// Legend and colour swatches.
+        static let dot: CGFloat = 9
+        /// The colour stripe down the side of an account card.
+        static let stripe: CGFloat = 4
+        /// The narrow companion column beside a card.
+        static let sidePanel: CGFloat = 330
+        static let sheetNarrow: CGFloat = 480
+        static let sheetWide: CGFloat = 620
+
+        static let fieldPaddingH: CGFloat = 9
+        static let fieldPaddingV: CGFloat = 5
+    }
 }
 
 extension Color {
@@ -89,6 +125,38 @@ private struct CardSurface: ViewModifier {
 extension View {
     func ftCard(padding: CGFloat = Theme.cardPadding) -> some View {
         modifier(CardSurface(padding: padding))
+    }
+}
+
+// MARK: - Screen scaffold
+
+/// A screen whose content fills the pane instead of sitting at its natural
+/// height with a void underneath. It still scrolls when the content is taller
+/// than the window, so small windows keep working.
+///
+/// Give whichever card should absorb the leftover height `.fillsHeight()`.
+struct FillingScreen<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.gap) {
+                    content
+                }
+                .padding(Theme.screenPadding)
+                .frame(minWidth: geometry.size.width,
+                       minHeight: geometry.size.height,
+                       alignment: .topLeading)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Absorbs whatever vertical space the screen has left over.
+    func fillsHeight(minimum: CGFloat = 240) -> some View {
+        frame(minHeight: minimum, maxHeight: .infinity)
     }
 }
 

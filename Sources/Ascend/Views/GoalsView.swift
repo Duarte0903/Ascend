@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 struct GoalsView: View {
     @Environment(\.modelContext) private var context
@@ -23,13 +24,76 @@ struct GoalsView: View {
                 set: { settings.targetNetWorth = max(0, $0); try? context.save() })
     }
 
+    private var derived: [DerivedRecord] {
+        LedgerEngine.derive(PortfolioStore.input(
+            accounts: accounts, records: records, settings: settings,
+            expenses: expenseItems))
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                hero
-                metrics
+        FillingScreen {
+            hero
+            metrics
+            if derived.count > 1 {
+                progressChart.fillsHeight(minimum: 260)
+            } else {
+                Spacer(minLength: 0)
             }
-            .padding(Theme.screenPadding)
+        }
+    }
+
+    /// How the target is actually being approached, which is the question the
+    /// rest of the screen only answers as a single number.
+    private var progressChart: some View {
+        CardSection("Progress over time",
+                    subtitle: "Every record against your \(Money.currency(goal.target)) target") {
+            Chart {
+                ForEach(derived) { row in
+                    AreaMark(x: .value("Date", row.date),
+                             y: .value("Net worth", row.total))
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.ftAccent.opacity(0.22), Color.ftAccent.opacity(0.01)],
+                            startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.linear)
+                }
+                ForEach(derived) { row in
+                    LineMark(x: .value("Date", row.date),
+                             y: .value("Net worth", row.total))
+                        .foregroundStyle(Color.ftAccent)
+                        .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                        .interpolationMethod(.linear)
+                }
+                if let last = derived.last {
+                    PointMark(x: .value("Date", last.date),
+                              y: .value("Net worth", last.total))
+                        .foregroundStyle(Color.ftAccent)
+                        .symbolSize(80)
+                }
+                RuleMark(y: .value("Target", goal.target))
+                    .foregroundStyle(Color.ftInkTertiary)
+                    .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [5, 5]))
+                    .annotation(position: .top, alignment: .leading) {
+                        Text("Target \(Money.currency(goal.target))")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Color.ftInkTertiary)
+                    }
+            }
+            .chartYScale(domain: 0...max(goal.target, goal.current) * 1.08)
+            .chartYAxis {
+                AxisMarks(position: .leading) { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                        .foregroundStyle(Color.ftHairline)
+                    AxisValueLabel().font(.system(size: 10))
+                        .foregroundStyle(Color.ftInkTertiary)
+                }
+            }
+            .chartXAxis {
+                AxisMarks { _ in
+                    AxisValueLabel().font(.system(size: 10))
+                        .foregroundStyle(Color.ftInkTertiary)
+                }
+            }
+            .frame(maxHeight: .infinity)
         }
     }
 
@@ -115,8 +179,15 @@ struct GoalsView: View {
 
     // MARK: - Supporting metrics
 
+    /// An HStack rather than an adaptive grid: adaptive sizes a fixed number of
+    /// column slots from the minimum width, so four tiles in a six-slot grid
+    /// stop two-thirds across. These four always span the full width, matching
+    /// the card above them.
     private var metrics: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 12)], spacing: 12) {
+        // Equal heights: a tile carrying a caption is naturally taller, so every
+        // tile stretches to the tallest in the row rather than each sizing to
+        // its own content.
+        HStack(alignment: .top, spacing: 12) {
             MetricTile(title: "Current net worth", value: Money.currency(goal.current))
             MetricTile(title: "Remaining", value: Money.currency(goal.remaining))
             MetricTile(title: "Avg change per record",
@@ -127,6 +198,7 @@ struct GoalsView: View {
                        caption: goal.estimatedRecordsToGoal == nil
                            ? "Needs a positive average change" : nil)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var changeCountCaption: String? {

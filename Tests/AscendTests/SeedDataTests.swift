@@ -21,10 +21,10 @@ func inMemoryContext() throws -> ModelContext {
     let accounts = try context.fetch(FetchDescriptor<Account>())
     let records = try context.fetch(FetchDescriptor<BalanceRecord>())
     #expect(accounts.count == 4)
-    #expect(records.count == 5)
+    #expect(records.count == 4)
     #expect(accounts.filter(\.isLeftoverDestination).count == 1)
-    #expect(accounts.first { $0.name == "Edenred" }?.includeInUsable == false)
-    #expect(accounts.first { $0.name == "XTB" }?.countsAsSavings == true)
+    #expect(accounts.first { $0.name == "Meal Card" }?.includeInUsable == false)
+    #expect(accounts.first { $0.name == "Brokerage" }?.countsAsSavings == true)
 }
 
 @MainActor
@@ -36,7 +36,7 @@ func inMemoryContext() throws -> ModelContext {
 }
 
 @MainActor
-@Test func seededDataReproducesTheWorkbookNumbers() throws {
+@Test func seededDataReproducesTheSampleNumbers() throws {
     let context = try inMemoryContext()
     SeedData.seedIfNeeded(context)
     let input = PortfolioStore.input(
@@ -47,15 +47,15 @@ func inMemoryContext() throws -> ModelContext {
 
     let derived = LedgerEngine.derive(input)
     let metrics = DashboardMetrics.compute(records: derived)
-    #expect(abs(metrics.currentNetWorth! - 8409.74) < 0.005)
-    #expect(abs(metrics.usableCash! - 8132.11) < 0.005)
-    #expect(abs(metrics.averageChange! - 236.1825) < 0.005)
-    #expect(abs(metrics.averageSavingsRate! - 0.008642763) < 0.0000001)
-    #expect(abs(derived[4].savingsRate! - 0.0278704688) < 0.0000001)
+    #expect(abs(metrics.currentNetWorth! - 3100) < 0.005)
+    #expect(abs(metrics.usableCash! - 3000) < 0.005)
+    #expect(abs(metrics.averageChange! - 333.3333333) < 0.005)
+    #expect(abs(metrics.averageSavingsRate! - 0.0721212121) < 0.0000001)
+    #expect(abs(derived[3].savingsRate! - 0.08) < 0.0000001)
 }
 
 @MainActor
-@Test func seededProjectionReachesTheGoalInEighteenMonths() throws {
+@Test func seededProjectionReachesTheGoalInFiveMonths() throws {
     let context = try inMemoryContext()
     SeedData.seedIfNeeded(context)
     let input = PortfolioStore.input(
@@ -65,6 +65,6 @@ func inMemoryContext() throws -> ModelContext {
         expenses: try context.fetch(FetchDescriptor<Expense>()))
     let projection = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                               from: Date())
-    #expect(projection.monthsToGoal == 18)
-    #expect(abs(projection.assumptions.leftoverPerMonth - 717) < 0.01)
+    #expect(projection.monthsToGoal == 5)
+    #expect(abs(projection.assumptions.leftoverPerMonth - 1200) < 0.01)
 }

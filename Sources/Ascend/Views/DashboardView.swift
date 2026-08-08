@@ -32,22 +32,20 @@ struct DashboardView: View {
     private let columns = [GridItem(.adaptive(minimum: 168), spacing: 12)]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                if allDerived.isEmpty {
-                    ContentUnavailableView("No records yet",
-                                           systemImage: "tablecells",
-                                           description: Text("Add your first record on the Balances screen."))
-                        .frame(height: 320)
-                } else if derived.isEmpty {
-                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
-                } else {
-                    hero
-                    metricGrid
-                    charts
-                }
+        FillingScreen {
+            if allDerived.isEmpty {
+                ContentUnavailableView("No records yet",
+                                       systemImage: "tablecells",
+                                       description: Text("Add your first record on the Balances screen."))
+                    .frame(maxWidth: .infinity)
+                    .fillsHeight()
+            } else if derived.isEmpty {
+                NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
+            } else {
+                hero
+                metricGrid
+                charts.fillsHeight(minimum: 260)
             }
-            .padding(Theme.screenPadding)
         }
         .toolbar {
             DateRangePicker(selection: Binding(
@@ -78,7 +76,7 @@ struct DashboardView: View {
                 .padding(.top, 9)
             }
             Spacer(minLength: 12)
-            sparkline.frame(maxWidth: 400, minHeight: 118)
+            sparkline.frame(maxWidth: 460, minHeight: 150)
         }
         .ftCard(padding: 20)
     }
@@ -90,13 +88,13 @@ struct DashboardView: View {
                     .foregroundStyle(LinearGradient(
                         colors: [Color.ftAccent.opacity(0.28), Color.ftAccent.opacity(0.01)],
                         startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
+                    .interpolationMethod(.linear)
             }
             ForEach(derived) { row in
                 LineMark(x: .value("Date", row.date), y: .value("Net worth", row.total))
                     .foregroundStyle(Color.ftAccent)
                     .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
-                    .interpolationMethod(.monotone)
+                    .interpolationMethod(.linear)
             }
             if let last = derived.last {
                 PointMark(x: .value("Date", last.date), y: .value("Net worth", last.total))
@@ -166,8 +164,7 @@ struct DashboardView: View {
     // MARK: - Charts
 
     private var charts: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: Theme.gap)],
-                  spacing: Theme.gap) {
+        HStack(alignment: .top, spacing: Theme.gap) {
             CardSection("Net worth vs usable cash",
                         subtitle: "All accounts, and the same excluding restricted ones") {
                 Chart {
@@ -176,19 +173,19 @@ struct DashboardView: View {
                             .foregroundStyle(LinearGradient(
                                 colors: [Color.ftAccent.opacity(0.22), Color.ftAccent.opacity(0.01)],
                                 startPoint: .top, endPoint: .bottom))
-                            .interpolationMethod(.monotone)
+                            .interpolationMethod(.linear)
                     }
                     ForEach(derived) { row in
                         LineMark(x: .value("Date", row.date), y: .value("Amount", row.total))
                             .foregroundStyle(by: .value("Series", "Total"))
                             .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
-                            .interpolationMethod(.monotone)
+                            .interpolationMethod(.linear)
                     }
                     ForEach(derived) { row in
                         LineMark(x: .value("Date", row.date), y: .value("Amount", row.usable))
                             .foregroundStyle(by: .value("Series", "Usable"))
                             .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
-                            .interpolationMethod(.monotone)
+                            .interpolationMethod(.linear)
                     }
                     if let last = derived.last {
                         PointMark(x: .value("Date", last.date), y: .value("Amount", last.total))
@@ -204,8 +201,9 @@ struct DashboardView: View {
                 .chartYScale(domain: .automatic(includesZero: false))
                 .chartYAxis { compactAxis }
                 .chartLegend(position: .bottom, alignment: .leading, spacing: 12)
-                .frame(height: 230)
+                .frame(maxHeight: .infinity)
             }
+            .fillsHeight(minimum: 260)
 
             CardSection("Change per record",
                         subtitle: "Movement between consecutive entries") {
@@ -221,8 +219,9 @@ struct DashboardView: View {
                         .cornerRadius(5)
                 }
                 .chartYAxis { compactAxis }
-                .frame(height: 230)
+                .frame(maxHeight: .infinity)
             }
+            .fillsHeight(minimum: 260)
         }
     }
 
