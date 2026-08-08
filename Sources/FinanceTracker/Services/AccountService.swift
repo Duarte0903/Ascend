@@ -83,6 +83,26 @@ enum AccountService {
         }
     }
 
+    /// Moves an account one place earlier or later among the active ones.
+    /// Column order on Balances and series order in charts follow from this.
+    static func move(_ account: Account, by offset: Int,
+                     accounts: [Account], in context: ModelContext) {
+        var active = accounts.filter { !$0.isArchived }.sorted { $0.sortOrder < $1.sortOrder }
+        guard let index = active.firstIndex(where: { $0.id == account.id }) else { return }
+        let destination = index + offset
+        guard active.indices.contains(destination) else { return }
+
+        active.swapAt(index, destination)
+        for (position, item) in active.enumerated() { item.sortOrder = position }
+        try? context.save()
+    }
+
+    static func canMove(_ account: Account, by offset: Int, accounts: [Account]) -> Bool {
+        let active = accounts.filter { !$0.isArchived }.sorted { $0.sortOrder < $1.sortOrder }
+        guard let index = active.firstIndex(where: { $0.id == account.id }) else { return false }
+        return active.indices.contains(index + offset)
+    }
+
     static func affectedRecordCount(for account: Account, records: [BalanceRecord]) -> Int {
         records.filter { record in
             record.entries.contains { $0.accountID == account.id }

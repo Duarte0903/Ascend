@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 @main
 struct FinanceTrackerApp: App {
     let container: ModelContainer
+    @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
 
     init() {
         let schema = Schema([Account.self, BalanceRecord.self, BalanceEntry.self, AppSettings.self])
@@ -30,6 +31,15 @@ struct FinanceTrackerApp: App {
                 Button("Export Backup…") { exportBackup() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Button("Import Backup…") { importBackup() }
+            }
+            CommandGroup(after: .toolbar) {
+                Picker("Appearance", selection: $appearanceRaw) {
+                    ForEach(AppearanceSetting.allCases) { option in
+                        Text(option.label).tag(option.rawValue)
+                    }
+                }
+                .pickerStyle(.inline)
+                Divider()
             }
         }
     }

@@ -8,6 +8,8 @@ struct MoneyField: View {
     var decimals: Int = 2
     var width: CGFloat = 108
     var font: Font = .figure(13, weight: .medium)
+    /// Rendered inside the field's box, so a unit never breaks column alignment.
+    var suffix: String?
 
     @FocusState private var focused: Bool
     @State private var hovering = false
@@ -22,20 +24,58 @@ struct MoneyField: View {
     }
 
     var body: some View {
-        TextField("", value: $value, format: .number.precision(.fractionLength(decimals)))
+        HStack(spacing: 3) {
+            TextField("", value: $value, format: .number.precision(.fractionLength(decimals)))
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing)
+                .font(font)
+                .monospacedDigit()
+                .foregroundStyle(Color.ftInk)
+                .focused($focused)
+            if let suffix {
+                Text(suffix)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .frame(width: width)
+        .background(Color.ftSurface, in: shape)
+        .overlay(shape.strokeBorder(border, lineWidth: focused ? 1.5 : 1))
+        .overlay(shape.inset(by: -2.5).strokeBorder(
+            Color.ftAccent.opacity(focused ? 0.28 : 0), lineWidth: 3))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.13), value: focused)
+        .animation(.easeOut(duration: 0.13), value: hovering)
+    }
+}
+
+/// An editable text label that still reads as editable — used for account names.
+struct NameField: View {
+    @Binding var text: String
+    var width: CGFloat = 200
+
+    @FocusState private var focused: Bool
+    @State private var hovering = false
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Theme.fieldRadius, style: .continuous)
+    }
+
+    var body: some View {
+        TextField("Name", text: $text)
             .textFieldStyle(.plain)
-            .multilineTextAlignment(.trailing)
-            .font(font)
-            .monospacedDigit()
+            .font(.system(size: 14.5, weight: .semibold))
             .foregroundStyle(Color.ftInk)
             .focused($focused)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .frame(width: width)
-            .background(Color.ftSurface, in: shape)
-            .overlay(shape.strokeBorder(border, lineWidth: focused ? 1.5 : 1))
-            .overlay(shape.inset(by: -2.5).strokeBorder(
-                Color.ftAccent.opacity(focused ? 0.28 : 0), lineWidth: 3))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(width: width, alignment: .leading)
+            .background(focused || hovering ? Color.ftSurfaceAlt : .clear, in: shape)
+            .overlay(shape.strokeBorder(
+                focused ? Color.ftAccent : (hovering ? Color.ftHairlineStrong : .clear),
+                lineWidth: focused ? 1.5 : 1))
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.13), value: focused)
             .animation(.easeOut(duration: 0.13), value: hovering)

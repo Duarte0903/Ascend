@@ -69,54 +69,76 @@ struct AccountsView: View {
     // MARK: - Account card
 
     private func accountCard(_ account: Account) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 11) {
-                TextField("Name", text: Binding(
+        HStack(spacing: 0) {
+            // Stripe is a plain rectangle clipped by the card, so its corners
+            // follow the card's radius instead of pinching into a sliver.
+            Rectangle()
+                .fill(Color(hex: account.colorHex))
+                .frame(width: 4)
+
+            VStack(alignment: .leading, spacing: 0) {
+                identityRow(account)
+                Divider().padding(.vertical, 13)
+                settingsRow(account)
+                Divider().padding(.vertical, 11)
+                footerRow(account)
+            }
+            .padding(Theme.cardPadding)
+        }
+        .background(Color.ftSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
+                .strokeBorder(Color.ftHairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.055), radius: 12, y: 4)
+    }
+
+    /// Who the account is, and what it's worth. Nothing else competes here.
+    private func identityRow(_ account: Account) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 7) {
+                NameField(text: Binding(
                     get: { account.name },
                     set: { newValue in
                         do { try AccountService.rename(account, to: newValue, in: context) }
                         catch { errorMessage = error.localizedDescription }
                     }))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(Color.ftInk)
-                    .frame(maxWidth: 210, alignment: .leading)
 
-                Chip(text: account.kind.displayName)
-                if account.isLeftoverDestination {
-                    Chip(text: "Receives leftover", highlighted: true)
+                HStack(spacing: 6) {
+                    Chip(text: account.kind.displayName)
+                    if account.isLeftoverDestination {
+                        Chip(text: "Receives leftover", highlighted: true)
+                    }
                 }
-
-                Spacer(minLength: 8)
-
-                Text(Money.currency(latest?.amount(for: account.id)))
-                    .font(.figure(18))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.ftInk)
-
-                ColorPicker("", selection: Binding(
-                    get: { Color(hex: account.colorHex) },
-                    set: { account.colorHex = $0.hexString; try? context.save() }))
-                    .labelsHidden()
-
-                Button("Archive") {
-                    do { try AccountService.archive(account, in: context) }
-                    catch { errorMessage = error.localizedDescription }
-                }
-                .controlSize(.small)
+                .padding(.leading, 2)
             }
 
-            Divider()
+            Spacer(minLength: 16)
 
-            HStack(alignment: .top, spacing: 28) {
-                VStack(alignment: .leading, spacing: 9) {
-                    Toggle("Counts toward usable cash", isOn: Binding(
+            VStack(alignment: .trailing, spacing: 1) {
+                Eyebrow("Current balance")
+                Text(Money.currency(latest?.amount(for: account.id)))
+                    .font(.figure(20))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.ftInk)
+            }
+        }
+    }
+
+    /// Two labelled groups. Each is its own Grid, so switches line up in one
+    /// column and fields line up in another.
+    private func settingsRow(_ account: Account) -> some View {
+        HStack(alignment: .top, spacing: 36) {
+            VStack(alignment: .leading, spacing: 9) {
+                Eyebrow("Counts toward")
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
+                    switchRow("Usable cash", isOn: Binding(
                         get: { account.includeInUsable },
                         set: { account.includeInUsable = $0; try? context.save() }))
-                    Toggle("Counts toward savings rate", isOn: Binding(
+                    switchRow("Savings rate", isOn: Binding(
                         get: { account.countsAsSavings },
                         set: { account.countsAsSavings = $0; try? context.save() }))
-                    Toggle("Receives the monthly leftover", isOn: Binding(
+                    switchRow("Monthly leftover", isOn: Binding(
                         get: { account.isLeftoverDestination },
                         set: { isOn in
                             AccountService.setLeftoverDestination(isOn ? account : nil,
@@ -124,55 +146,90 @@ struct AccountsView: View {
                             try? context.save()
                         }))
                 }
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color.ftInkSecondary)
+            }
 
-                Spacer(minLength: 0)
+            Spacer(minLength: 0)
 
-                VStack(alignment: .trailing, spacing: 9) {
-                    LabeledContent {
+            VStack(alignment: .leading, spacing: 9) {
+                Eyebrow("Projections")
+                Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
+                    GridRow {
+                        Text("Monthly contribution")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Color.ftInkSecondary)
                         MoneyField(value: Binding(
                             get: { account.monthlyContribution },
-                            set: { account.monthlyContribution = $0; try? context.save() }),
-                            decimals: 0, width: 88)
-                    } label: {
-                        Text("Monthly contribution").font(.system(size: 12.5))
-                            .foregroundStyle(Color.ftInkSecondary)
+                            set: { account.monthlyContribution = max(0, $0); try? context.save() }),
+                            decimals: 0, width: 96, suffix: "€")
+                            .gridColumnAlignment(.trailing)
                     }
-                    LabeledContent {
-                        HStack(spacing: 5) {
-                            MoneyField(value: Binding(
-                                get: { account.expectedAnnualReturn * 100 },
-                                set: { account.expectedAnnualReturn = $0 / 100; try? context.save() }),
-                                decimals: 2, width: 74)
-                            Text("%").font(.system(size: 12))
-                                .foregroundStyle(Color.ftInkTertiary)
-                        }
-                    } label: {
-                        Text("Expected annual return").font(.system(size: 12.5))
+                    GridRow {
+                        Text("Expected annual return")
+                            .font(.system(size: 12.5))
                             .foregroundStyle(Color.ftInkSecondary)
+                        MoneyField(value: Binding(
+                            get: { account.expectedAnnualReturn * 100 },
+                            set: { account.expectedAnnualReturn = $0 / 100; try? context.save() }),
+                            decimals: 2, width: 96, suffix: "%")
+                            .gridColumnAlignment(.trailing)
                     }
                 }
-                .fixedSize()
             }
         }
-        .padding(Theme.cardPadding)
-        .background(Color.ftSurface,
-                    in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay(alignment: .leading) {
-            // Colour stripe ties the card to the account's charts elsewhere.
-            UnevenRoundedRectangle(topLeadingRadius: Theme.cardRadius,
-                                   bottomLeadingRadius: Theme.cardRadius,
-                                   style: .continuous)
-                .fill(Color(hex: account.colorHex))
-                .frame(width: 3.5)
+    }
+
+    private func switchRow(_ label: String, isOn: Binding<Bool>) -> some View {
+        GridRow {
+            Text(label)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.ftInkSecondary)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .gridColumnAlignment(.trailing)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous)
-                .strokeBorder(Color.ftHairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.055), radius: 12, y: 4)
+    }
+
+    /// Reordering and destructive actions, kept away from the settings.
+    private func footerRow(_ account: Account) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                AccountService.move(account, by: -1, accounts: accounts, in: context)
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!AccountService.canMove(account, by: -1, accounts: accounts))
+            .help("Move earlier")
+
+            Button {
+                AccountService.move(account, by: 1, accounts: accounts, in: context)
+            } label: {
+                Image(systemName: "chevron.down")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!AccountService.canMove(account, by: 1, accounts: accounts))
+            .help("Move later")
+
+            Text("Column order")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.ftInkTertiary)
+
+            Spacer()
+
+            ColorPicker("", selection: Binding(
+                get: { Color(hex: account.colorHex) },
+                set: { account.colorHex = $0.hexString; try? context.save() }))
+                .labelsHidden()
+                .help("Chart colour")
+
+            Button("Archive") {
+                do { try AccountService.archive(account, in: context) }
+                catch { errorMessage = error.localizedDescription }
+            }
+            .controlSize(.small)
+        }
     }
 
     private var archivedCard: some View {

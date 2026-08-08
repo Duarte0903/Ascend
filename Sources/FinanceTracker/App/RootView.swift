@@ -7,6 +7,12 @@ struct RootView: View {
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
 
     @State private var selection: AppSection = .dashboard
+    @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
+
+    private var appearance: Binding<AppearanceSetting> {
+        Binding(get: { AppearanceSetting(rawValue: appearanceRaw) ?? .system },
+                set: { appearanceRaw = $0.rawValue })
+    }
 
     private var netWorth: Double? {
         LedgerEngine.derive(PortfolioStore.input(
@@ -46,20 +52,24 @@ struct RootView: View {
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 196, ideal: 214, max: 260)
         .safeAreaInset(edge: .bottom) {
-            VStack(alignment: .leading, spacing: 1) {
-                Eyebrow("Net worth")
-                Text(Money.currency(netWorth))
-                    .font(.figure(18))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.ftInk)
-                    .contentTransition(.numericText())
+            VStack(alignment: .leading, spacing: 9) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Eyebrow("Net worth")
+                    Text(Money.currency(netWorth))
+                        .font(.figure(18))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.ftInk)
+                        .contentTransition(.numericText())
+                }
+                AppearancePicker(selection: appearance)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .background(.bar)
             .overlay(Divider(), alignment: .top)
         }
+        .onAppear { appearance.wrappedValue.apply() }
     }
 
     private var detail: some View {

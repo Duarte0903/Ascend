@@ -158,6 +158,55 @@ private func netWorth(_ context: ModelContext) throws -> Double {
 }
 
 @MainActor
+@Test func movingAnAccountReordersColumnsWithoutGaps() throws {
+    let context = try seededContext()
+    let accounts = try context.fetch(FetchDescriptor<Account>())
+    let xtb = accounts.first { $0.name == "XTB" }!
+
+    AccountService.move(xtb, by: -1, accounts: accounts, in: context)
+
+    let order = try context.fetch(FetchDescriptor<Account>())
+        .sorted { $0.sortOrder < $1.sortOrder }.map(\.name)
+    #expect(order == ["Banco CTT", "XTB", "Revolut", "Edenred"])
+    #expect(order.indices.allSatisfy { index in
+        try! context.fetch(FetchDescriptor<Account>())
+            .sorted { $0.sortOrder < $1.sortOrder }[index].sortOrder == index
+    })
+}
+
+@MainActor
+@Test func movingBeyondTheEndsIsRefused() throws {
+    let context = try seededContext()
+    let accounts = try context.fetch(FetchDescriptor<Account>())
+    let first = accounts.first { $0.name == "Banco CTT" }!
+    let last = accounts.first { $0.name == "Edenred" }!
+
+    #expect(AccountService.canMove(first, by: -1, accounts: accounts) == false)
+    #expect(AccountService.canMove(last, by: 1, accounts: accounts) == false)
+
+    AccountService.move(first, by: -1, accounts: accounts, in: context)
+    let order = try context.fetch(FetchDescriptor<Account>())
+        .sorted { $0.sortOrder < $1.sortOrder }.map(\.name)
+    #expect(order == ["Banco CTT", "Revolut", "XTB", "Edenred"])
+}
+
+@MainActor
+@Test func reorderingDoesNotChangeAnyDerivedNumber() throws {
+    let context = try seededContext()
+    let before = try netWorth(context)
+    let accounts = try context.fetch(FetchDescriptor<Account>())
+    AccountService.move(accounts.first { $0.name == "Edenred" }!, by: -1,
+                        accounts: accounts, in: context)
+    #expect(abs(try netWorth(context) - before) < 0.005)
+
+    let input = PortfolioStore.input(
+        accounts: try context.fetch(FetchDescriptor<Account>()),
+        records: try context.fetch(FetchDescriptor<BalanceRecord>()),
+        settings: SeedData.settings(in: context))
+    #expect(abs(LedgerEngine.derive(input).last!.usable - 8132.11) < 0.005)
+}
+
+@MainActor
 @Test func hardDeleteRemovesTheAccountAndItsEntries() throws {
     let context = try seededContext()
     let edenred = try context.fetch(FetchDescriptor<Account>()).first { $0.name == "Edenred" }!
