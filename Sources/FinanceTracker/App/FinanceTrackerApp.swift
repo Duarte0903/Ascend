@@ -32,13 +32,23 @@ struct FinanceTrackerApp: App {
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                 Button("Import Backup…") { importBackup() }
             }
-            CommandGroup(after: .toolbar) {
-                Picker("Appearance", selection: $appearanceRaw) {
-                    ForEach(AppearanceSetting.allCases) { option in
-                        Text(option.label).tag(option.rawValue)
+            // View ▸ Appearance. Each option carries a checkmark and a
+            // shortcut, which reads better in a menu than a segmented picker.
+            CommandGroup(after: .sidebar) {
+                Divider()
+                ForEach(Array(AppearanceSetting.allCases.enumerated()), id: \.element) { index, option in
+                    Button {
+                        appearanceRaw = option.rawValue
+                        option.apply()
+                    } label: {
+                        HStack {
+                            Text("Appearance: \(option.label)")
+                            if appearanceRaw == option.rawValue { Image(systemName: "checkmark") }
+                        }
                     }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")),
+                                      modifiers: [.command, .control])
                 }
-                .pickerStyle(.inline)
                 Divider()
             }
         }

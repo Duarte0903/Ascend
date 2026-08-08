@@ -23,15 +23,21 @@ struct MoneyField: View {
         return hovering ? .ftInkTertiary : .ftHairlineStrong
     }
 
+    /// Edits are buffered here and committed on Enter or focus loss. Binding
+    /// straight to the store would save on every keystroke, refresh the query,
+    /// and reformat the text mid-typing — which reads as the field fighting you.
+    @State private var text: String = ""
+
     var body: some View {
         HStack(spacing: 3) {
-            TextField("", value: $value, format: .number.precision(.fractionLength(decimals)))
+            TextField("", text: $text)
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.trailing)
                 .font(font)
                 .monospacedDigit()
                 .foregroundStyle(Color.ftInk)
                 .focused($focused)
+                .onSubmit { commit() }
             if let suffix {
                 Text(suffix)
                     .font(.system(size: 11.5))
@@ -48,16 +54,67 @@ struct MoneyField: View {
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.13), value: focused)
         .animation(.easeOut(duration: 0.13), value: hovering)
+        .onAppear { text = NumberText.string(from: value, decimals: decimals) }
+        .onChange(of: value) { _, new in
+            // Only follow the model when the user isn't mid-edit.
+            if !focused { text = NumberText.string(from: new, decimals: decimals) }
+        }
+        .onChange(of: focused) { _, isFocused in
+            if isFocused {
+                // Select-all on entry so typing replaces rather than appends.
+                DispatchQueue.main.async { NSApp?.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil) }
+            } else {
+                commit()
+            }
+        }
+    }
+
+    private func commit() {
+        if let parsed = NumberText.double(from: text) {
+            value = parsed
+            text = NumberText.string(from: parsed, decimals: decimals)
+        } else {
+            // Unparseable input reverts rather than silently becoming zero.
+            text = NumberText.string(from: value, decimals: decimals)
+        }
+    }
+}
+
+/// Parsing and display for editable figures. Accepts a comma or a dot as the
+/// decimal separator, and tolerates spaces and a stray € or %.
+enum NumberText {
+    static func string(from value: Double, decimals: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.decimalSeparator = ","
+        formatter.minimumFractionDigits = decimals
+        formatter.maximumFractionDigits = decimals
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
+    }
+
+    static func double(from text: String) -> Double? {
+        let cleaned = text
+            .replacingOccurrences(of: "\u{202F}", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "€", with: "")
+            .replacingOccurrences(of: "%", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        guard !cleaned.isEmpty else { return nil }
+        return Double(cleaned)
     }
 }
 
 /// An editable text label that still reads as editable — used for account names.
+/// Commits on Enter or focus loss, so a half-typed name is never validated.
 struct NameField: View {
-    @Binding var text: String
+    let name: String
     var width: CGFloat = 200
+    var onCommit: (String) -> Void
 
     @FocusState private var focused: Bool
     @State private var hovering = false
+    @State private var text: String = ""
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: Theme.fieldRadius, style: .continuous)
@@ -65,6 +122,10 @@ struct NameField: View {
 
     var body: some View {
         TextField("Name", text: $text)
+            .onSubmit { commitIfChanged() }
+            .onAppear { text = name }
+            .onChange(of: name) { _, new in if !focused { text = new } }
+            .onChange(of: focused) { _, isFocused in if !isFocused { commitIfChanged() } }
             .textFieldStyle(.plain)
             .font(.system(size: 14.5, weight: .semibold))
             .foregroundStyle(Color.ftInk)
@@ -79,6 +140,13 @@ struct NameField: View {
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.13), value: focused)
             .animation(.easeOut(duration: 0.13), value: hovering)
+    }
+
+    private func commitIfChanged() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != name else { return }
+        onCommit(trimmed)
+        text = name
     }
 }
 
@@ -95,17 +163,17 @@ struct IntField: View {
         RoundedRectangle(cornerRadius: Theme.fieldRadius, style: .continuous)
     }
 
+    @State private var text: String = ""
+
     var body: some View {
-        TextField("", value: Binding(
-            get: { value },
-            set: { value = min(max($0, range.lowerBound), range.upperBound) }),
-            format: .number)
+        TextField("", text: $text)
             .textFieldStyle(.plain)
             .multilineTextAlignment(.trailing)
             .font(.figure(13, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(Color.ftInk)
             .focused($focused)
+            .onSubmit { commit() }
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
             .frame(width: width)
@@ -118,6 +186,16 @@ struct IntField: View {
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.13), value: focused)
             .animation(.easeOut(duration: 0.13), value: hovering)
+            .onAppear { text = "\(value)" }
+            .onChange(of: value) { _, new in if !focused { text = "\(new)" } }
+            .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
+    }
+
+    private func commit() {
+        if let parsed = NumberText.double(from: text) {
+            value = min(max(Int(parsed), range.lowerBound), range.upperBound)
+        }
+        text = "\(value)"
     }
 }
 
@@ -150,15 +228,18 @@ struct HeroField: View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
     }
 
+    @State private var text: String = ""
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            TextField("", value: $value, format: .number.precision(.fractionLength(0)))
+            TextField("", text: $text)
                 .textFieldStyle(.plain)
                 .multilineTextAlignment(.trailing)
                 .font(.figure(42))
                 .monospacedDigit()
                 .foregroundStyle(Color.ftInk)
                 .focused($focused)
+                .onSubmit { commit() }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 5)
                 .frame(width: width)
@@ -171,10 +252,20 @@ struct HeroField: View {
                 .onHover { hovering = $0 }
                 .animation(.easeOut(duration: 0.14), value: focused)
                 .animation(.easeOut(duration: 0.14), value: hovering)
+                .onAppear { text = NumberText.string(from: value, decimals: 0) }
+                .onChange(of: value) { _, new in
+                    if !focused { text = NumberText.string(from: new, decimals: 0) }
+                }
+                .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
 
             Text(suffix)
                 .font(.figure(30, weight: .medium))
                 .foregroundStyle(Color.ftInkTertiary)
         }
+    }
+
+    private func commit() {
+        if let parsed = NumberText.double(from: text) { value = parsed }
+        text = NumberText.string(from: value, decimals: 0)
     }
 }

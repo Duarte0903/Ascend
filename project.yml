@@ -26,6 +26,7 @@ targets:
         CFBundleDisplayName: Finance Tracker
         CFBundleIdentifier: com.duarte.financetracker
         CFBundleShortVersionString: "1.0"
+        CFBundleIconFile: AppIcon
         LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.finance
         NSHumanReadableCopyright: ""

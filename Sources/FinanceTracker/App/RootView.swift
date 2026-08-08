@@ -52,19 +52,16 @@ struct RootView: View {
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 196, ideal: 214, max: 260)
         .safeAreaInset(edge: .bottom) {
-            VStack(alignment: .leading, spacing: 9) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Eyebrow("Net worth")
-                    Text(Money.currency(netWorth))
-                        .font(.figure(18))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.ftInk)
-                        .contentTransition(.numericText())
-                }
-                AppearancePicker(selection: appearance)
+            VStack(alignment: .leading, spacing: 1) {
+                Eyebrow("Net worth")
+                Text(Money.currency(netWorth))
+                    .font(.figure(18))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.ftInk)
+                    .contentTransition(.numericText())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(.bar)
             .overlay(Divider(), alignment: .top)

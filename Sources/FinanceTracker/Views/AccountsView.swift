@@ -97,12 +97,10 @@ struct AccountsView: View {
     private func identityRow(_ account: Account) -> some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 7) {
-                NameField(text: Binding(
-                    get: { account.name },
-                    set: { newValue in
-                        do { try AccountService.rename(account, to: newValue, in: context) }
-                        catch { errorMessage = error.localizedDescription }
-                    }))
+                NameField(name: account.name) { newValue in
+                    do { try AccountService.rename(account, to: newValue, in: context) }
+                    catch { errorMessage = error.localizedDescription }
+                }
 
                 HStack(spacing: 6) {
                     Chip(text: account.kind.displayName)

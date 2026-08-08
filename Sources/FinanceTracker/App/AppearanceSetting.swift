@@ -38,22 +38,3 @@ enum AppearanceSetting: String, CaseIterable, Identifiable {
         NSApp?.appearance = nsAppearance
     }
 }
-
-/// A compact three-way control for the sidebar footer.
-struct AppearancePicker: View {
-    @Binding var selection: AppearanceSetting
-
-    var body: some View {
-        Picker("Appearance", selection: $selection) {
-            ForEach(AppearanceSetting.allCases) { option in
-                Image(systemName: option.icon)
-                    .help(option.label)
-                    .tag(option)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
-        .onChange(of: selection) { _, new in new.apply() }
-    }
-}
