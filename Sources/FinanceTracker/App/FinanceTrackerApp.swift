@@ -17,8 +17,7 @@ struct FinanceTrackerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Text("Finance Tracker")
-                .frame(minWidth: 900, minHeight: 600)
+            RootView()
         }
         .modelContainer(container)
         .defaultSize(width: 1180, height: 800)
