@@ -40,10 +40,14 @@ Derived (computed and verified against the source PDF):
 | # | Total | Usable | Change € | Change % | Savings Rate |
 |---|---|---|---|---|---|
 | 1 | 7465.01 | 7196.58 | — | — | — |
-| 2 | 7465.01 | 7196.58 | 0.00 | 0.0 % | 0.66979 % |
+| 2 | 7465.01 | 7196.58 | 0.00 | 0.0 % | 0.6697915 % |
 | 3 | 7495.01 | 7226.58 | 30.00 | 0.40188 % | 0 % |
 | 4 | 7495.03 | 7226.60 | 0.02 | 0.000267 % | 0.000267 % |
-| 5 | 8409.74 | 8132.11 | 914.71 | 12.20427 % | 2.78706 % |
+| 5 | 8409.74 | 8132.11 | 914.71 | 12.20427 % | 2.7870469 % |
+
+Records are ordered by date, then by creation time. The two records sharing 01/07/2026 must
+keep their workbook order — swapping them would move the +50 € Revolut deposit to the wrong
+row and change both savings-rate figures.
 
 Dashboard: net worth 8409.74 · usable 8132.11 · latest change 914.71 / 12.204 % ·
 total growth 944.73 · best 914.71 · avg change 236.1825 · records 5 · avg savings rate 0.86429 %.
