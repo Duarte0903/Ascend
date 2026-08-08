@@ -1,45 +1,57 @@
-# Ascend
+<p align="center">
+  <img src="docs/icon.png" width="132" alt="Ascend app icon" />
+</p>
 
-A native macOS net-worth tracker that replaces the `net_worth_tracker_pro` Excel workbook,
-and adds what a spreadsheet cannot do: creating, editing, archiving and deleting bank
-accounts without rewriting any formulas.
+<h1 align="center">Ascend</h1>
 
-## Build and install
+<p align="center">
+  A native macOS app for tracking your net worth over time.
+</p>
 
-```bash
-./scripts/install.sh
-```
+---
 
-Builds, ad-hoc signs, and copies the app to `/Applications/Ascend.app`.
+Ascend records **balance snapshots**, not transactions. Whenever you feel like it, you
+write down what each of your accounts is worth on that date — and it works out everything
+else: what your net worth is, how much of it you can actually spend, how fast it is
+growing, how much of your income you are putting away, when you will hit your target, and
+where you will be in five years.
 
-To build without installing:
+It began as a replacement for a spreadsheet that did the same job with four hardcoded
+columns. The point of rewriting it was the thing a spreadsheet cannot do: **create,
+rename, retype, reorder, archive and delete accounts** without touching a single formula,
+and without ever silently changing the history you have already logged.
 
-```bash
-./scripts/build.sh
-```
+It is a single-user, local, offline app. No accounts, no sync, no bank connections, no
+telemetry. Your data sits in a file on your Mac.
 
-To run the tests:
+### What it is not
 
-```bash
-./scripts/test.sh
-```
+Not a budgeting app and not an expense tracker. There are no transactions or spending
+categories, because it never asks where your money went — only what it adds up to today.
 
-## The screens
+## Screens
 
 | Screen | What it does |
 |---|---|
-| Dashboard | Nine KPIs, net worth vs usable cash, change per record |
-| Balances | The input table — one row per recording date, one column per account |
-| Trends | Stacked balances, account comparison, growth rate, savings rate |
-| Allocation | Where your money sits, from the most recent record |
-| Goals | Target, remaining, progress, estimated records to goal |
-| Projections | Assumptions, 1/3/5-year outlook, months to goal, month-by-month table |
-| Accounts | Create, edit, archive, restore, delete |
+| **Dashboard** | Nine headline figures, net worth against usable cash, change per record |
+| **Balances** | The input table — one row per date, one column per account, everything else calculated |
+| **Trends** | Stacked balances, account comparison, growth rate, savings rate |
+| **Allocation** | Where your money sits right now, as a donut and a table |
+| **Goals** | Set a target; see progress, what's left, and how many more records it will take |
+| **Projections** | Your assumptions, the 1/3/5-year outlook, months to goal, and a month-by-month forecast |
+| **Accounts** | Create, describe, retype, recolour, reorder, archive, restore and delete accounts |
+
+Dashboard, Balances and Trends share a **period filter** — all time, 3, 6 or 12 months, or
+year to date — and Trends can hide individual accounts. Filtering never rewrites history:
+a visible record's change is still measured against the record that really preceded it,
+even when that one falls outside the window.
+
+Appearance follows macOS, with a manual override under **View ▸ Appearance** (⌃⌘1/2/3).
 
 ## How accounts work
 
-Each account carries four independent properties, pre-filled from its type but always
-editable:
+Every account carries a description and a type, plus four properties that are pre-filled
+from its type and then entirely its own:
 
 - **Counts toward Usable Cash** — off for restricted accounts like a food card
 - **Counts toward Savings Rate** — on for savings and investment accounts
@@ -49,8 +61,15 @@ editable:
 Exactly one account is the **leftover destination**: in projections it receives
 `income − expenses − contributions` each month.
 
+**Account types are yours to edit.** Main, Savings, Investment and Restricted are just the
+starting rows — rename them, change their defaults, delete the ones you don't use, or add
+your own (Crypto, Pension, Property) from **Account Types…** on the Accounts screen. A type
+supplies defaults when an account is created and never rewrites an account afterwards,
+because doing so would retroactively change historical Usable and Savings Rate figures.
+A type still in use cannot be deleted.
+
 Adding an account reads as 0 € in earlier records, so historical totals never change.
-Archiving keeps history intact; hard-deleting strips the account from past records and
+Archiving keeps history intact. Hard-deleting strips the account from past records, and
 says how many it will affect before you confirm.
 
 ## The formulas
@@ -63,14 +82,20 @@ says how many it will affect before you confirm.
 | **Savings Rate** | Σ Δbalance of savings accounts ÷ **previous** total |
 | Total Growth | latest total − first total |
 | Est. records to goal | ⌈remaining ÷ average change⌉ |
+| Total invested / month | Σ contributions of accounts that are usable **or** savings |
+| Leftover / month | income − expenses − total invested |
 | Projection, monthly | `balance × (1+r)^(1/12) + contribution`, leftover account also gets the surplus |
+
+A contribution to an account that is neither usable cash nor savings — an employer-loaded
+food card, say — is not funded from your salary, so it counts toward neither the invested
+total nor the leftover deduction. The balance still grows by it.
 
 Values that are genuinely undefined — a change with no prior record, a percentage over a
 zero total — render as `—`, never as `0`.
 
-Records are ordered by date, then by creation time. Two records may share a date (the
-source workbook has two on 01/07/2026) and their order decides the savings-rate column,
-so it is preserved explicitly rather than left to chance.
+Records are ordered by date, then by creation time. Two records may share a date, and their
+order decides the savings-rate column, so it is preserved explicitly rather than left to
+chance.
 
 ## Architecture
 
@@ -86,13 +111,38 @@ instantly and the dashboard can never disagree with the table.
 
 `Services/PortfolioStore.swift` is the only bridge between the two worlds.
 
+## Build and install
+
+Needs Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+
+```bash
+./scripts/install.sh
+```
+
+Builds, ad-hoc signs, and copies the app to `/Applications/Ascend.app`. Ad-hoc signatures
+do not expire and a locally built app carries no quarantine flag, so it just opens — no
+Apple Developer account needed, ever.
+
+Build without installing, run the tests, or regenerate the icon:
+
+```bash
+./scripts/build.sh
+./scripts/test.sh
+swift scripts/make-icon.swift
+```
+
+`Ascend.xcodeproj` is generated from `project.yml` and deliberately not committed.
+
 ## Data and backups
 
-Data lives in a local SwiftData store in the app's own container. **File → Export Backup…**
-(⇧⌘E) writes a JSON file; **File → Import Backup…** replaces the store from one.
+Data lives in a local SwiftData store on your Mac. **File → Export Backup…** (⇧⌘E) writes a
+JSON file carrying accounts, types, records and settings; **File → Import Backup…**
+replaces the store from one.
 
-On first launch the app seeds itself with the original workbook: four accounts, five
-records, the 25 000 € goal and the projection assumptions.
+On first launch the app seeds itself with the four accounts and five records carried over
+from the original spreadsheet, plus its goal and projection assumptions, so no screen starts
+empty. Those figures are the author's own starting point — rename the accounts, delete the
+records, or import a backup to make it yours.
 
 ## Tests
 
@@ -100,8 +150,8 @@ records, the 25 000 € goal and the projection assumptions.
 ./scripts/test.sh
 ```
 
-62 tests. The suite asserts the engine against the source PDF value by value, checks the
-account lifecycle (adding an account leaves historical totals untouched, archiving
-preserves them, flags flow through to Usable and Savings Rate), round-trips backups, and
-verifies the exact strings each screen renders — `8 410 €`, `12,2 %`, `2,8 %`, `82,8 %`,
-`71` records to goal, `18` months to goal.
+104 tests, none of which need the app to launch. They pin the engine's arithmetic value by
+value, the account and type lifecycles (adding an account leaves historical totals
+untouched; archiving preserves them; editing a type never rewrites existing accounts),
+number parsing in both `1.234,56` and `1,234.56` conventions, period filtering, backup
+round-trips, and the exact strings each screen renders.
