@@ -87,6 +87,69 @@ private func project() -> Projection {
     #expect(abs(p.months[1].balances[WorkbookFixture.cttID]! - 6962.35) < tol)
 }
 
+// MARK: - What counts as investing your income
+
+/// A contribution to an account that is neither usable cash nor savings — an
+/// employer-loaded food card, for instance — is not funded from your salary,
+/// so it must stay out of Total Invested and out of the leftover deduction.
+@Test func totalInvestedIgnoresAccountsThatAreNeitherUsableNorSavings() {
+    var input = WorkbookFixture.portfolio
+    input.accounts = input.accounts.map { account in
+        var copy = account
+        if copy.id == WorkbookFixture.edenredID { copy.monthlyContribution = 90 }
+        return copy
+    }
+    let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
+                                     from: WorkbookFixture.date(8, 8, 2026))
+    #expect(abs(p.assumptions.totalInvestedPerMonth - 200) < tol)
+    #expect(abs(p.assumptions.leftoverPerMonth - 717) < tol)
+}
+
+/// The balance still grows by that contribution — it is only the funding
+/// source that differs.
+@Test func excludedAccountsStillReceiveTheirContribution() {
+    var input = WorkbookFixture.portfolio
+    input.accounts = input.accounts.map { account in
+        var copy = account
+        if copy.id == WorkbookFixture.edenredID { copy.monthlyContribution = 90 }
+        return copy
+    }
+    let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
+                                     from: WorkbookFixture.date(8, 8, 2026))
+    #expect(abs(p.months[1].balances[WorkbookFixture.edenredID]! - (277.63 + 90)) < tol)
+}
+
+/// An account that is savings but not usable still counts — either flag is enough.
+@Test func savingsOnlyAccountsStillCountAsInvested() {
+    var input = WorkbookFixture.portfolio
+    input.accounts = input.accounts.map { account in
+        var copy = account
+        if copy.id == WorkbookFixture.xtbID { copy.includeInUsable = false }
+        return copy
+    }
+    let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
+                                     from: WorkbookFixture.date(8, 8, 2026))
+    #expect(abs(p.assumptions.totalInvestedPerMonth - 200) < tol)
+}
+
+/// Flipping both flags off removes the contribution from the total, which
+/// raises the leftover by the same amount.
+@Test func clearingBothFlagsMovesContributionOutOfTheTotal() {
+    var input = WorkbookFixture.portfolio
+    input.accounts = input.accounts.map { account in
+        var copy = account
+        if copy.id == WorkbookFixture.revolutID {
+            copy.includeInUsable = false
+            copy.countsAsSavings = false
+        }
+        return copy
+    }
+    let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
+                                     from: WorkbookFixture.date(8, 8, 2026))
+    #expect(abs(p.assumptions.totalInvestedPerMonth - 100) < tol)
+    #expect(abs(p.assumptions.leftoverPerMonth - 817) < tol)
+}
+
 @Test func projectingWithNoRecordsYieldsNoMonths() {
     var input = WorkbookFixture.portfolio
     input.records = []

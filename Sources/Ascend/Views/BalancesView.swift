@@ -10,7 +10,19 @@ struct BalancesView: View {
 
     private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
+    @AppStorage("dateRange") private var rangeRaw = DateRangeFilter.all.rawValue
+
+    private var range: DateRangeFilter {
+        DateRangeFilter(rawValue: rangeRaw) ?? .all
+    }
+
+    /// Windowed for display only. Change and savings rate are still computed
+    /// against the record that actually preceded each row.
     private var derived: [DerivedRecord] {
+        range.apply(to: allDerived, now: Date())
+    }
+
+    private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
             settings: SeedData.settings(in: context)))
@@ -26,6 +38,8 @@ struct BalancesView: View {
                                            systemImage: "tablecells",
                                            description: Text("Add your first record to start tracking."))
                         .frame(height: 300)
+                } else if derived.isEmpty {
+                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
                 } else {
                     table
                 }
@@ -34,6 +48,8 @@ struct BalancesView: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                DateRangePicker(selection: Binding(
+                    get: { range }, set: { rangeRaw = $0.rawValue }))
                 Button("Duplicate Last", systemImage: "doc.on.doc") { duplicateLast() }
                     .disabled(records.isEmpty)
                 Button("Add Record", systemImage: "plus") { addRecord() }

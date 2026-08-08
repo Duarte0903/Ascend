@@ -82,6 +82,11 @@ struct RootView: View {
             }
         }
         .background(Color.ftCanvas)
+        // Clicking any inert area drops first responder, which commits whatever
+        // field was being edited. Fields, buttons and toggles handle their own
+        // taps, so they take precedence over this.
+        .contentShape(Rectangle())
+        .onTapGesture { NSApp?.keyWindow?.makeFirstResponder(nil) }
         .navigationTitle(selection.title)
         .navigationSubtitle(selection.subtitle)
         .frame(minWidth: 760, minHeight: 580)

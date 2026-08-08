@@ -7,9 +7,26 @@ struct TrendsView: View {
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
 
-    private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
+    @AppStorage("dateRange") private var rangeRaw = DateRangeFilter.all.rawValue
+    @State private var hiddenAccounts: Set<UUID> = []
+
+    private var range: DateRangeFilter {
+        DateRangeFilter(rawValue: rangeRaw) ?? .all
+    }
+
+    /// Accounts the charts should plot. Hiding one never changes a stored
+    /// figure — Total and Usable keep counting every account.
+    private var activeAccounts: [Account] {
+        accounts.filter { !$0.isArchived && !hiddenAccounts.contains($0.id) }
+    }
+
+    private var allActiveAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
     private var derived: [DerivedRecord] {
+        range.apply(to: allDerived, now: Date())
+    }
+
+    private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
             settings: SeedData.settings(in: context)))
@@ -20,11 +37,13 @@ struct TrendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.gap) {
-                if derived.isEmpty {
+                if allDerived.isEmpty {
                     ContentUnavailableView("Nothing to chart yet",
                                            systemImage: "chart.xyaxis.line",
                                            description: Text("Add records on the Balances screen."))
                         .frame(height: 320)
+                } else if derived.isEmpty {
+                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: Theme.gap)],
                               spacing: Theme.gap) {
@@ -36,6 +55,13 @@ struct TrendsView: View {
                 }
             }
             .padding(Theme.screenPadding)
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                AccountFilterMenu(accounts: allActiveAccounts, hidden: $hiddenAccounts)
+                DateRangePicker(selection: Binding(
+                    get: { range }, set: { rangeRaw = $0.rawValue }))
+            }
         }
     }
 

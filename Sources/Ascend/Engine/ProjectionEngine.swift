@@ -40,7 +40,13 @@ enum ProjectionEngine {
                         records: [DerivedRecord],
                         from startDate: Date) -> Projection {
         let accounts = input.activeAccountsSorted
-        let totalInvested = accounts.reduce(0) { $0 + $1.monthlyContribution }
+
+        // Only accounts that hold spendable or saved money count as investing
+        // your income. A contribution to an account that is neither — a
+        // food-only card, say — is funded from outside your salary, so it must
+        // not be deducted from it, or the leftover would be understated.
+        let fundedFromIncome = accounts.filter { $0.includeInUsable || $0.countsAsSavings }
+        let totalInvested = fundedFromIncome.reduce(0) { $0 + $1.monthlyContribution }
         let leftover = input.monthlyNetIncome - input.maxMonthlyExpenses - totalInvested
         let leftoverID = accounts.first(where: \.isLeftoverDestination)?.id
 

@@ -80,28 +80,78 @@ struct MoneyField: View {
     }
 }
 
-/// Parsing and display for editable figures. Accepts a comma or a dot as the
-/// decimal separator, and tolerates spaces and a stray € or %.
+/// Parsing and display for editable figures.
+///
+/// Accepts every form a person actually types: `6285,73`, `6285.73`, and
+/// grouped input in either convention — `6.285,73` or `6,285.73`. Naive
+/// comma-to-dot substitution cannot do this: it turns `6.285,73` into
+/// `6.285.73`, which fails to parse and makes the field discard the edit.
 enum NumberText {
-    static func string(from value: Double, decimals: Int) -> String {
+    static func string(from value: Double, decimals: Int,
+                       locale: Locale = .current) -> String {
         let formatter = NumberFormatter()
+        formatter.locale = locale
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = false
-        formatter.decimalSeparator = ","
+        formatter.decimalSeparator = locale.decimalSeparator ?? ","
         formatter.minimumFractionDigits = decimals
         formatter.maximumFractionDigits = decimals
         return formatter.string(from: NSNumber(value: value)) ?? "0"
     }
 
-    static func double(from text: String) -> Double? {
-        let cleaned = text
-            .replacingOccurrences(of: "\u{202F}", with: "")
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "€", with: "")
-            .replacingOccurrences(of: "%", with: "")
-            .replacingOccurrences(of: ",", with: ".")
+    static func double(from text: String, locale: Locale = .current) -> Double? {
+        var cleaned = text
+        for junk in ["\u{202F}", "\u{00A0}", " ", "€", "%", "+"] {
+            cleaned = cleaned.replacingOccurrences(of: junk, with: "")
+        }
         guard !cleaned.isEmpty else { return nil }
-        return Double(cleaned)
+
+        let negative = cleaned.hasPrefix("-")
+        if negative { cleaned.removeFirst() }
+
+        let localeDecimal = Character(locale.decimalSeparator ?? ",")
+        // nil means every separator present is grouping — there is no decimal part.
+        let decimal = decimalSeparator(in: cleaned, localeDecimal: localeDecimal)
+
+        // Whatever is not the decimal separator is grouping, and goes.
+        let normalised = String(cleaned.compactMap { character -> Character? in
+            if let decimal, character == decimal { return "." }
+            if character == "," || character == "." { return nil }
+            return character
+        })
+        guard normalised.allSatisfy({ $0.isNumber || $0 == "." }),
+              normalised.filter({ $0 == "." }).count <= 1,
+              normalised != "."
+        else { return nil }
+
+        return Double(normalised.hasPrefix(".") ? "0" + normalised : normalised)
+            .map { negative ? -$0 : $0 }
+    }
+
+    /// Decides which of `,` / `.` is acting as the decimal point.
+    private static func decimalSeparator(in text: String,
+                                         localeDecimal: Character) -> Character? {
+        let commas = text.filter { $0 == "," }.count
+        let dots = text.filter { $0 == "." }.count
+        guard commas + dots > 0 else { return nil }
+
+        // Both present: the later one is the decimal point, the other groups.
+        if commas > 0 && dots > 0 {
+            let lastComma = text.lastIndex(of: ",")!
+            let lastDot = text.lastIndex(of: ".")!
+            return lastComma > lastDot ? "," : "."
+        }
+
+        let separator: Character = commas > 0 ? "," : "."
+        // Repeated, so it must be grouping — there is no decimal part.
+        if max(commas, dots) > 1 { return nil }
+
+        // A single separator with exactly three digits after it is ambiguous
+        // ("1.234"), so fall back to what the locale means by a decimal point.
+        let trailing = text.distance(from: text.index(after: text.lastIndex(of: separator)!),
+                                     to: text.endIndex)
+        if trailing == 3 { return separator == localeDecimal ? separator : nil }
+        return separator
     }
 }
 

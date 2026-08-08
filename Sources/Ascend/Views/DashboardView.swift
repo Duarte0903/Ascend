@@ -7,7 +7,19 @@ struct DashboardView: View {
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
 
+    @AppStorage("dateRange") private var rangeRaw = DateRangeFilter.all.rawValue
+
+    private var range: DateRangeFilter {
+        DateRangeFilter(rawValue: rangeRaw) ?? .all
+    }
+
+    /// Derived over the full history, then windowed — so each record's change
+    /// stays relative to its real predecessor.
     private var derived: [DerivedRecord] {
+        range.apply(to: allDerived, now: Date())
+    }
+
+    private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
             settings: SeedData.settings(in: context)))
@@ -20,11 +32,13 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.gap) {
-                if derived.isEmpty {
+                if allDerived.isEmpty {
                     ContentUnavailableView("No records yet",
                                            systemImage: "tablecells",
                                            description: Text("Add your first record on the Balances screen."))
                         .frame(height: 320)
+                } else if derived.isEmpty {
+                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
                 } else {
                     hero
                     metricGrid
@@ -32,6 +46,10 @@ struct DashboardView: View {
                 }
             }
             .padding(Theme.screenPadding)
+        }
+        .toolbar {
+            DateRangePicker(selection: Binding(
+                get: { range }, set: { rangeRaw = $0.rawValue }))
         }
     }
 
