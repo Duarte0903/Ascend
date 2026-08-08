@@ -50,9 +50,9 @@ keep their workbook order — swapping them would move the +50 € Revolut depos
 row and change both savings-rate figures.
 
 Dashboard: net worth 8409.74 · usable 8132.11 · latest change 914.71 / 12.204 % ·
-total growth 944.73 · best 914.71 · avg change 236.1825 · records 5 · avg savings rate 0.86429 %.
+total growth 944.73 · best 914.71 · avg change 236.1825 · records 5 · avg savings rate 0.8642763 %.
 
-Allocation (record 5): CTT 82.788 % · Revolut 4.1651 % · XTB 9.7445 % · Edenred 3.3013 %.
+Allocation (record 5): CTT 82.78912 % · Revolut 4.16505 % · XTB 9.74453 % · Edenred 3.30129 %.
 
 Goals (target 25 000): remaining 16 590.26 · progress 33.639 % · est. records 71.
 
