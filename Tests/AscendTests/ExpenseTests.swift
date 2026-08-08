@@ -32,6 +32,33 @@ private func expenses(_ context: ModelContext) throws -> [Expense] {
     #expect(abs(yearly.monthlyAmount - 20) < 0.000001)
 }
 
+/// The yearly column: what twelve months of a commitment actually costs,
+/// whatever its billing rhythm.
+@Test func reportsAYearlyCostPerExpense() {
+    let phone = ExpenseInput(id: UUID(), name: "Phone", amount: 15, frequency: .monthly)
+    let water = ExpenseInput(id: UUID(), name: "Water", amount: 60, frequency: .quarterly)
+    let insurance = ExpenseInput(id: UUID(), name: "Insurance", amount: 240, frequency: .yearly)
+
+    #expect(abs(phone.yearlyAmount - 180) < 0.000001)
+    #expect(abs(water.yearlyAmount - 240) < 0.000001)
+    // A yearly bill costs exactly its own amount over a year.
+    #expect(abs(insurance.yearlyAmount - 240) < 0.000001)
+}
+
+@Test func pausedExpensesCostNothingOverAYear() {
+    let paused = ExpenseInput(id: UUID(), name: "Gym", amount: 30, isActive: false)
+    #expect(paused.yearlyAmount == 0)
+}
+
+/// The column footer must agree with the hero figure above it.
+@Test func yearlyColumnSumsToTheYearlyTotal() {
+    let items = WorkbookFixture.expenses
+    let metrics = ExpenseMetrics.compute(expenses: items, categoryNames: [:])
+    let columnSum = items.reduce(0) { $0 + $1.yearlyAmount }
+    #expect(abs(columnSum - metrics.yearlyTotal) < 0.000001)
+    #expect(abs(metrics.yearlyTotal - 2400) < 0.005)
+}
+
 @Test func pausedExpensesStopCounting() {
     var expense = ExpenseInput(id: UUID(), name: "Gym", amount: 30)
     #expect(expense.monthlyAmount == 30)

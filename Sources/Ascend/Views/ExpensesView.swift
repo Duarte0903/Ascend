@@ -109,6 +109,7 @@ struct ExpensesView: View {
                         Text("Frequency").frame(width: 104, alignment: .leading)
                         Text("Category").frame(width: 136, alignment: .leading)
                         Text("Per month").frame(width: 96, alignment: .trailing)
+                        Text("Per year").frame(width: 100, alignment: .trailing)
                         Text("Active").frame(width: 52, alignment: .center)
                         Color.clear.frame(width: 22)
                     }
@@ -136,6 +137,8 @@ struct ExpensesView: View {
                         Text("").frame(width: 136)
                         DerivedText(text: Money.currency(metrics.monthlyTotal, decimals: 2),
                                     width: 96, emphasis: true)
+                        DerivedText(text: Money.currency(metrics.yearlyTotal, decimals: 2),
+                                    width: 100, emphasis: true)
                         Text("").frame(width: 52)
                         Color.clear.frame(width: 22)
                     }
@@ -183,6 +186,10 @@ struct ExpensesView: View {
 
             DerivedText(text: Money.currency(expense.monthlyAmount, decimals: 2),
                         width: 96,
+                        tint: expense.isActive ? nil : Color.ftInkTertiary)
+
+            DerivedText(text: Money.currency(expense.yearlyAmount, decimals: 2),
+                        width: 100,
                         tint: expense.isActive ? nil : Color.ftInkTertiary)
 
             Toggle("", isOn: Binding(

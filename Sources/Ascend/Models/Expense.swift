@@ -21,6 +21,7 @@ final class Expense {
     }
 
     var monthlyAmount: Double { isActive ? amount * frequency.monthlyFactor : 0 }
+    var yearlyAmount: Double { monthlyAmount * 12 }
 
     init(id: UUID = UUID(), name: String, note: String = "", amount: Double,
          frequency: ExpenseFrequency = .monthly, categoryID: UUID? = nil,

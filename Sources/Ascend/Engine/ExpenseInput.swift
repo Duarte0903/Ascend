@@ -59,4 +59,8 @@ struct ExpenseInput: Identifiable, Hashable, Sendable {
     var monthlyAmount: Double {
         isActive ? amount * frequency.monthlyFactor : 0
     }
+
+    /// What a full year of it costs. Derived from the monthly figure so a paused
+    /// commitment reads as zero here too.
+    var yearlyAmount: Double { monthlyAmount * 12 }
 }
