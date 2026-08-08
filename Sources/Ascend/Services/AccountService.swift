@@ -7,6 +7,10 @@ enum AccountError: LocalizedError, Equatable {
     case cannotArchiveLeftoverDestination
     case cannotArchiveLastAccount
     case needsLeftoverDestination
+    case emptyCategoryName
+    case duplicateCategoryName
+    case categoryInUse(accounts: Int)
+    case cannotDeleteLastCategory
 
     var errorDescription: String? {
         switch self {
@@ -20,13 +24,23 @@ enum AccountError: LocalizedError, Equatable {
             "You need at least one active account."
         case .needsLeftoverDestination:
             "Pick an account to receive the monthly leftover."
+        case .emptyCategoryName:
+            "Give the type a name."
+        case .duplicateCategoryName:
+            "A type with that name already exists."
+        case .categoryInUse(let accounts):
+            "\(accounts) account\(accounts == 1 ? " uses" : "s use") this type. Move them to another type first."
+        case .cannotDeleteLastCategory:
+            "You need at least one account type."
         }
     }
 }
 
 enum AccountService {
-    static func create(name: String, kind: AccountKind, colorHex: String,
-                       in context: ModelContext) throws -> Account {
+    /// New accounts inherit their category's defaults, then own them outright —
+    /// later changes to the category never rewrite an existing account.
+    static func create(name: String, category: AccountCategory?, colorHex: String,
+                       note: String = "", in context: ModelContext) throws -> Account {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw AccountError.emptyName }
 
@@ -36,13 +50,81 @@ enum AccountService {
         }) else { throw AccountError.duplicateName }
 
         let account = Account(
-            name: trimmed, kind: kind, colorHex: colorHex,
+            name: trimmed,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            categoryID: category?.id,
+            colorHex: colorHex,
             sortOrder: (existing.map(\.sortOrder).max() ?? -1) + 1,
-            includeInUsable: kind.defaultIncludeInUsable,
-            countsAsSavings: kind.defaultCountsAsSavings)
+            includeInUsable: category?.defaultIncludeInUsable ?? true,
+            countsAsSavings: category?.defaultCountsAsSavings ?? false,
+            expectedAnnualReturn: category?.defaultAnnualReturn ?? 0)
         context.insert(account)
         try? context.save()
         return account
+    }
+
+    // MARK: - Categories
+
+    static func createCategory(name: String, includeInUsable: Bool, countsAsSavings: Bool,
+                               annualReturn: Double = 0,
+                               in context: ModelContext) throws -> AccountCategory {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw AccountError.emptyCategoryName }
+
+        let existing = (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? []
+        guard !existing.contains(where: {
+            $0.name.compare(trimmed, options: .caseInsensitive) == .orderedSame
+        }) else { throw AccountError.duplicateCategoryName }
+
+        let category = AccountCategory(
+            name: trimmed,
+            sortOrder: (existing.map(\.sortOrder).max() ?? -1) + 1,
+            defaultIncludeInUsable: includeInUsable,
+            defaultCountsAsSavings: countsAsSavings,
+            defaultAnnualReturn: annualReturn)
+        context.insert(category)
+        try? context.save()
+        return category
+    }
+
+    static func renameCategory(_ category: AccountCategory, to name: String,
+                               in context: ModelContext) throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw AccountError.emptyCategoryName }
+        let existing = (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? []
+        guard !existing.contains(where: {
+            $0.id != category.id
+                && $0.name.compare(trimmed, options: .caseInsensitive) == .orderedSame
+        }) else { throw AccountError.duplicateCategoryName }
+        category.name = trimmed
+        try? context.save()
+    }
+
+    static func accountsUsing(_ category: AccountCategory, accounts: [Account]) -> Int {
+        accounts.filter { $0.categoryID == category.id }.count
+    }
+
+    /// Refused while any account still uses it, so a category can never vanish
+    /// out from under an account.
+    static func deleteCategory(_ category: AccountCategory, accounts: [Account],
+                               in context: ModelContext) throws {
+        let inUse = accountsUsing(category, accounts: accounts)
+        guard inUse == 0 else { throw AccountError.categoryInUse(accounts: inUse) }
+
+        let all = (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? []
+        guard all.count > 1 else { throw AccountError.cannotDeleteLastCategory }
+
+        context.delete(category)
+        let remaining = all.filter { $0.id != category.id }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        for (position, item) in remaining.enumerated() { item.sortOrder = position }
+        try? context.save()
+    }
+
+    static func assign(_ account: Account, to category: AccountCategory?,
+                       in context: ModelContext) {
+        account.categoryID = category?.id
+        try? context.save()
     }
 
     static func rename(_ account: Account, to name: String, in context: ModelContext) throws {

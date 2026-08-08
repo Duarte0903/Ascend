@@ -71,6 +71,11 @@ struct AllocationView: View {
         }
     }
 
+    private func note(for accountID: UUID) -> String? {
+        let note = accounts.first { $0.id == accountID }?.note ?? ""
+        return note.isEmpty ? nil : note
+    }
+
     private var latestCaption: String? {
         latestDate.map { "Most recent record, \($0.formatted(.dateTime.day().month(.wide).year()))" }
     }
@@ -97,6 +102,7 @@ struct AllocationView: View {
                                 .frame(width: 9, height: 9)
                             Text(slice.name).font(.system(size: 12.5))
                         }
+                        .help(note(for: slice.accountID) ?? slice.name)
                         DerivedText(text: Money.currency(slice.amount))
                         DerivedText(text: Money.percent(slice.share))
                     }

@@ -5,13 +5,20 @@ struct AccountsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query private var records: [BalanceRecord]
+    @Query(sort: \AccountCategory.sortOrder) private var categories: [AccountCategory]
 
     @State private var showingNewAccount = false
     @State private var newName = ""
-    @State private var newKind: AccountKind = .savings
+    @State private var newNote = ""
+    @State private var newCategoryID: UUID?
     @State private var newColor = Color(hex: Theme.accountPalette[0])
     @State private var errorMessage: String?
     @State private var pendingDeletion: Account?
+
+    @State private var showingTypes = false
+    @State private var newTypeName = ""
+    @State private var newTypeUsable = true
+    @State private var newTypeSavings = false
 
     private var active: [Account] { accounts.filter { !$0.isArchived } }
     private var archived: [Account] { accounts.filter(\.isArchived) }
@@ -32,6 +39,7 @@ struct AccountsView: View {
                 }
 
                 if !archived.isEmpty { archivedCard }
+                typesCard
             }
             .padding(Theme.screenPadding)
         }
@@ -39,6 +47,7 @@ struct AccountsView: View {
             Button("New Account", systemImage: "plus") { showingNewAccount = true }
         }
         .sheet(isPresented: $showingNewAccount) { newAccountSheet }
+        .sheet(isPresented: $showingTypes) { newTypeSheet }
         .alert("Couldn't do that",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
@@ -68,6 +77,113 @@ struct AccountsView: View {
 
     // MARK: - Account card
 
+    // MARK: - Account types
+
+    private var typesCard: some View {
+        CardSection("Account types",
+                    subtitle: "Your own categories. New accounts inherit a type's defaults; existing ones keep their own settings.",
+                    trailing: {
+            Button("New Type", systemImage: "plus") { showingTypes = true }
+                .controlSize(.small)
+        }) {
+            VStack(spacing: 0) {
+                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                    HStack(spacing: 12) {
+                        NameField(name: category.name, width: 168) { newValue in
+                            do { try AccountService.renameCategory(category, to: newValue, in: context) }
+                            catch { errorMessage = error.localizedDescription }
+                        }
+
+                        Toggle("Usable", isOn: Binding(
+                            get: { category.defaultIncludeInUsable },
+                            set: { category.defaultIncludeInUsable = $0; try? context.save() }))
+                        Toggle("Savings", isOn: Binding(
+                            get: { category.defaultCountsAsSavings },
+                            set: { category.defaultCountsAsSavings = $0; try? context.save() }))
+
+                        MoneyField(value: Binding(
+                            get: { category.defaultAnnualReturn * 100 },
+                            set: { category.defaultAnnualReturn = $0 / 100; try? context.save() }),
+                            decimals: 2, width: 86, suffix: "%")
+
+                        Spacer(minLength: 8)
+
+                        let inUse = AccountService.accountsUsing(category, accounts: accounts)
+                        Text(inUse == 0 ? "unused" : "\(inUse) account\(inUse == 1 ? "" : "s")")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.ftInkTertiary)
+
+                        Button {
+                            do { try AccountService.deleteCategory(category, accounts: accounts, in: context) }
+                            catch { errorMessage = error.localizedDescription }
+                        } label: {
+                            Image(systemName: "trash").font(.system(size: 11))
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(inUse > 0)
+                        .help(inUse > 0 ? "In use — move its accounts to another type first"
+                                        : "Delete this type")
+                    }
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.ftInkSecondary)
+                    .padding(.vertical, 7)
+
+                    if index < categories.count - 1 { Divider() }
+                }
+            }
+        }
+    }
+
+    private var newTypeSheet: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("New Account Type").font(.system(size: 17, weight: .semibold))
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
+                GridRow {
+                    Text("Name").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
+                    TextField("e.g. Crypto", text: $newTypeName)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 240)
+                }
+                GridRow {
+                    Text("Defaults").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle("Counts toward usable cash", isOn: $newTypeUsable)
+                        Toggle("Counts toward savings rate", isOn: $newTypeSavings)
+                    }
+                    .toggleStyle(.checkbox)
+                    .controlSize(.small)
+                }
+            }
+            Callout(text: "These only apply to accounts you create afterwards. Changing a type later never rewrites accounts that already exist.")
+            HStack {
+                Spacer()
+                Button("Cancel") { resetTypeSheet() }
+                Button("Create") {
+                    do {
+                        _ = try AccountService.createCategory(
+                            name: newTypeName, includeInUsable: newTypeUsable,
+                            countsAsSavings: newTypeSavings, in: context)
+                        resetTypeSheet()
+                    } catch { errorMessage = error.localizedDescription }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(newTypeName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(22)
+        .frame(width: 460)
+    }
+
+    private func resetTypeSheet() {
+        newTypeName = ""
+        newTypeUsable = true
+        newTypeSavings = false
+        showingTypes = false
+    }
+
     private func accountCard(_ account: Account) -> some View {
         HStack(spacing: 0) {
             // Stripe is a plain rectangle clipped by the card, so its corners
@@ -93,6 +209,10 @@ struct AccountsView: View {
         .shadow(color: .black.opacity(0.055), radius: 12, y: 4)
     }
 
+    private func category(for account: Account) -> AccountCategory? {
+        categories.first { $0.id == account.categoryID }
+    }
+
     /// Who the account is, and what it's worth. Nothing else competes here.
     private func identityRow(_ account: Account) -> some View {
         HStack(alignment: .top, spacing: 12) {
@@ -103,12 +223,34 @@ struct AccountsView: View {
                 }
 
                 HStack(spacing: 6) {
-                    Chip(text: account.kind.displayName)
+                    Picker("", selection: Binding(
+                        get: { account.categoryID },
+                        set: { newID in
+                            AccountService.assign(account,
+                                                  to: categories.first { $0.id == newID },
+                                                  in: context)
+                        })) {
+                        ForEach(categories) { option in
+                            Text(option.name).tag(Optional(option.id))
+                        }
+                        if account.categoryID == nil || category(for: account) == nil {
+                            Text("No type").tag(Optional<UUID>.none)
+                        }
+                    }
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+
                     if account.isLeftoverDestination {
                         Chip(text: "Receives leftover", highlighted: true)
                     }
                 }
                 .padding(.leading, 2)
+
+                DescriptionField(note: account.note) { newValue in
+                    account.note = newValue
+                    try? context.save()
+                }
             }
 
             Spacer(minLength: 16)
@@ -271,11 +413,18 @@ struct AccountsView: View {
                 }
                 GridRow {
                     Text("Type").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
-                    Picker("", selection: $newKind) {
-                        ForEach(AccountKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    Picker("", selection: $newCategoryID) {
+                        ForEach(categories) { Text($0.name).tag(Optional($0.id)) }
                     }
                     .labelsHidden()
                     .frame(width: 240)
+                }
+                GridRow {
+                    Text("Description").font(.system(size: 12.5))
+                        .foregroundStyle(Color.ftInkSecondary)
+                    TextField("What is this account for?", text: $newNote)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 240)
                 }
                 GridRow {
                     Text("Colour").font(.system(size: 12.5)).foregroundStyle(Color.ftInkSecondary)
@@ -313,18 +462,28 @@ struct AccountsView: View {
     }
 
     private var kindExplanation: String {
-        switch newKind {
-        case .main: "Counts toward usable cash. Not treated as savings."
-        case .savings: "Counts toward usable cash and toward your savings rate."
-        case .investment: "Counts toward usable cash and toward your savings rate. Give it an expected return."
-        case .restricted: "Excluded from usable cash — for food cards and similar."
+        guard let selected = categories.first(where: { $0.id == newCategoryID }) else {
+            return "Pick a type to inherit its defaults, or set the flags yourself afterwards."
         }
+        var parts: [String] = []
+        parts.append(selected.defaultIncludeInUsable
+            ? "Counts toward usable cash." : "Excluded from usable cash.")
+        parts.append(selected.defaultCountsAsSavings
+            ? "Counts toward your savings rate." : "Not treated as savings.")
+        if selected.defaultAnnualReturn != 0 {
+            parts.append("Starts at \(Money.percent(selected.defaultAnnualReturn)) expected annual return.")
+        }
+        return parts.joined(separator: " ")
     }
 
     private func create() {
         do {
-            _ = try AccountService.create(name: newName, kind: newKind,
-                                          colorHex: newColor.hexString, in: context)
+            _ = try AccountService.create(
+                name: newName,
+                category: categories.first { $0.id == newCategoryID },
+                colorHex: newColor.hexString,
+                note: newNote,
+                in: context)
             resetSheet()
         } catch {
             errorMessage = error.localizedDescription
@@ -333,7 +492,8 @@ struct AccountsView: View {
 
     private func resetSheet() {
         newName = ""
-        newKind = .savings
+        newNote = ""
+        newCategoryID = categories.first?.id
         newColor = Color(hex: Theme.accountPalette[0])
         showingNewAccount = false
     }

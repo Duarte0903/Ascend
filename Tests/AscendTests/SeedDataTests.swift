@@ -5,7 +5,7 @@ import SwiftData
 
 @MainActor
 func inMemoryContext() throws -> ModelContext {
-    let schema = Schema([Account.self, BalanceRecord.self, BalanceEntry.self, AppSettings.self])
+    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self, BalanceEntry.self, AppSettings.self])
     let container = try ModelContainer(
         for: schema,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true))

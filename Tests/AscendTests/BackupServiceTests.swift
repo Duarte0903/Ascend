@@ -60,7 +60,7 @@ import SwiftData
 
     let target = try inMemoryContext()
     SeedData.seedIfNeeded(target)
-    _ = try AccountService.create(name: "Extra", kind: .savings,
+    _ = try AccountService.create(name: "Extra", category: nil,
                                   colorHex: "#123456", in: target)
     try BackupService.restore(from: data, into: target)
     #expect(try target.fetch(FetchDescriptor<Account>()).count == 4)

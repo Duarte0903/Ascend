@@ -11,6 +11,11 @@ private func seededContext() throws -> ModelContext {
 }
 
 @MainActor
+func category(_ name: String, in context: ModelContext) -> AccountCategory? {
+    (try? context.fetch(FetchDescriptor<AccountCategory>()))?.first { $0.name == name }
+}
+
+@MainActor
 private func netWorth(_ context: ModelContext) throws -> Double {
     let input = PortfolioStore.input(
         accounts: try context.fetch(FetchDescriptor<Account>()),
@@ -23,7 +28,7 @@ private func netWorth(_ context: ModelContext) throws -> Double {
 @Test func addingAnAccountLeavesHistoricalTotalsUnchanged() throws {
     let context = try seededContext()
     let before = try netWorth(context)
-    _ = try AccountService.create(name: "Trade Republic", kind: .investment,
+    _ = try AccountService.create(name: "Trade Republic", category: category("Investment", in: context),
                                   colorHex: "#00838F", in: context)
     #expect(abs(try netWorth(context) - before) < 0.005)
 }
@@ -31,7 +36,7 @@ private func netWorth(_ context: ModelContext) throws -> Double {
 @MainActor
 @Test func newAccountsReadAsZeroInExistingRecords() throws {
     let context = try seededContext()
-    let account = try AccountService.create(name: "Trade Republic", kind: .investment,
+    let account = try AccountService.create(name: "Trade Republic", category: category("Investment", in: context),
                                             colorHex: "#00838F", in: context)
     let records = try context.fetch(FetchDescriptor<BalanceRecord>())
     #expect(records.allSatisfy { $0.amount(for: account.id) == 0 })
@@ -40,12 +45,12 @@ private func netWorth(_ context: ModelContext) throws -> Double {
 @MainActor
 @Test func createdAccountsInheritTypeDefaults() throws {
     let context = try seededContext()
-    let restricted = try AccountService.create(name: "Meal card", kind: .restricted,
+    let restricted = try AccountService.create(name: "Meal card", category: category("Restricted", in: context),
                                                colorHex: "#AD1457", in: context)
     #expect(restricted.includeInUsable == false)
     #expect(restricted.countsAsSavings == false)
 
-    let savings = try AccountService.create(name: "Emergency", kind: .savings,
+    let savings = try AccountService.create(name: "Emergency", category: category("Savings", in: context),
                                             colorHex: "#00695C", in: context)
     #expect(savings.includeInUsable == true)
     #expect(savings.countsAsSavings == true)
@@ -55,10 +60,10 @@ private func netWorth(_ context: ModelContext) throws -> Double {
 @Test func rejectsEmptyAndDuplicateNames() throws {
     let context = try seededContext()
     #expect(throws: AccountError.emptyName) {
-        _ = try AccountService.create(name: "  ", kind: .main, colorHex: "#000000", in: context)
+        _ = try AccountService.create(name: "  ", category: nil, colorHex: "#000000", in: context)
     }
     #expect(throws: AccountError.duplicateName) {
-        _ = try AccountService.create(name: "revolut", kind: .savings,
+        _ = try AccountService.create(name: "revolut", category: nil,
                                       colorHex: "#000000", in: context)
     }
 }

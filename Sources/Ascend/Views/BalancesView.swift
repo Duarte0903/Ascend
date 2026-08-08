@@ -68,6 +68,8 @@ struct BalancesView: View {
                     Text(account.name)
                 }
                 .frame(width: 112, alignment: .trailing)
+                // Description surfaces on hover rather than crowding the header.
+                .help(account.note.isEmpty ? account.name : account.note)
             }
             Text("Total").frame(width: 96)
             Text("Usable").frame(width: 96)

@@ -1,26 +1,11 @@
 import Foundation
 
-enum AccountKind: String, Codable, CaseIterable, Sendable {
-    case main, savings, investment, restricted
-
-    var displayName: String {
-        switch self {
-        case .main: "Main"
-        case .savings: "Savings"
-        case .investment: "Investment"
-        case .restricted: "Restricted"
-        }
-    }
-
-    /// Defaults applied at creation; every one stays editable afterwards.
-    var defaultIncludeInUsable: Bool { self != .restricted }
-    var defaultCountsAsSavings: Bool { self == .savings || self == .investment }
-}
-
+/// What the engine needs to know about an account. Category and description are
+/// presentation concerns and deliberately absent — no derived figure depends on
+/// them, so they stay out of the calculation layer.
 struct AccountInfo: Identifiable, Hashable, Sendable {
     let id: UUID
     var name: String
-    var kind: AccountKind
     var colorHex: String
     var sortOrder: Int
     var includeInUsable: Bool

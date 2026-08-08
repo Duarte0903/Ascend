@@ -5,7 +5,12 @@ import SwiftData
 final class Account {
     var id: UUID = UUID()
     var name: String = ""
-    var kindRaw: String = AccountKind.main.rawValue
+    /// Free-text note — what this account is for, in your own words.
+    var note: String = ""
+    var categoryID: UUID?
+    /// Retained only so accounts created before categories existed can be
+    /// migrated onto one. Not used for anything else.
+    var kindRaw: String = "main"
     var colorHex: String = "#1565C0"
     var sortOrder: Int = 0
     var includeInUsable: Bool = true
@@ -16,18 +21,16 @@ final class Account {
     var isArchived: Bool = false
     var archivedAt: Date?
 
-    var kind: AccountKind {
-        get { AccountKind(rawValue: kindRaw) ?? .main }
-        set { kindRaw = newValue.rawValue }
-    }
-
-    init(id: UUID = UUID(), name: String, kind: AccountKind, colorHex: String,
+    init(id: UUID = UUID(), name: String, note: String = "",
+         categoryID: UUID? = nil, legacyKind: String = "main", colorHex: String,
          sortOrder: Int, includeInUsable: Bool, countsAsSavings: Bool,
          expectedAnnualReturn: Double = 0, monthlyContribution: Double = 0,
          isLeftoverDestination: Bool = false) {
         self.id = id
         self.name = name
-        self.kindRaw = kind.rawValue
+        self.note = note
+        self.categoryID = categoryID
+        self.kindRaw = legacyKind
         self.colorHex = colorHex
         self.sortOrder = sortOrder
         self.includeInUsable = includeInUsable
@@ -38,7 +41,7 @@ final class Account {
     }
 
     func toInfo() -> AccountInfo {
-        AccountInfo(id: id, name: name, kind: kind, colorHex: colorHex,
+        AccountInfo(id: id, name: name, colorHex: colorHex,
                     sortOrder: sortOrder, includeInUsable: includeInUsable,
                     countsAsSavings: countsAsSavings,
                     expectedAnnualReturn: expectedAnnualReturn,

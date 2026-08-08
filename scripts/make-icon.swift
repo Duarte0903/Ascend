@@ -46,34 +46,38 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
                               width: rect.width, height: rect.height / 2), angle: -90)
     context.restoreGState()
 
-    // The rising line, in the app's own proportions.
-    let points: [CGPoint] = [
-        CGPoint(x: 0.20, y: 0.36), CGPoint(x: 0.38, y: 0.45),
-        CGPoint(x: 0.55, y: 0.40), CGPoint(x: 0.78, y: 0.70),
-    ].map { CGPoint(x: rect.minX + rect.width * $0.x, y: rect.minY + rect.height * $0.y) }
+    // The mark is an "A" that is also a summit — the name, drawn.
+    func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+        CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+    }
 
-    let line = NSBezierPath()
-    line.move(to: points[0])
-    for point in points.dropFirst() { line.line(to: point) }
-    line.lineWidth = rect.width * 0.088  // heavy enough to hold at 16pt
-    line.lineCapStyle = .round
-    line.lineJoinStyle = .round
+    let strokeWidth = rect.width * 0.105
 
-    // Drop shadow gives the mark a little lift off the gradient.
     context.saveGState()
     context.setShadow(offset: CGSize(width: 0, height: -rect.width * 0.012),
-                      blur: rect.width * 0.03,
-                      color: NSColor(white: 0, alpha: 0.28).cgColor)
-    NSColor.white.setStroke()
-    line.stroke()
+                      blur: rect.width * 0.032,
+                      color: NSColor(white: 0, alpha: 0.26).cgColor)
 
-    // Endpoint dot — the same emphasis the dashboard sparkline uses.
-    let dotRadius = rect.width * 0.072
-    let dot = NSBezierPath(ovalIn: CGRect(x: points[3].x - dotRadius, y: points[3].y - dotRadius,
-                                          width: dotRadius * 2, height: dotRadius * 2))
-    NSColor.white.setFill()
-    dot.fill()
+    let ascent = NSBezierPath()
+    ascent.move(to: point(0.18, 0.20))
+    ascent.line(to: point(0.50, 0.80))
+    ascent.line(to: point(0.82, 0.20))
+    ascent.lineWidth = strokeWidth
+    ascent.lineCapStyle = .round
+    ascent.lineJoinStyle = .round
+    NSColor.white.setStroke()
+    ascent.stroke()
     context.restoreGState()
+
+    // Crossbar completes the letter. Kept at partial opacity so the summit
+    // reads first, but heavy enough to survive 16pt.
+    let crossbar = NSBezierPath()
+    crossbar.move(to: point(0.335, 0.435))
+    crossbar.line(to: point(0.665, 0.435))
+    crossbar.lineWidth = strokeWidth * 0.8
+    crossbar.lineCapStyle = .round
+    NSColor(white: 1, alpha: 0.72).setStroke()
+    crossbar.stroke()
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

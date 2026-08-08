@@ -7,6 +7,15 @@ struct BackupFile: Codable {
         var includeInUsable: Bool, countsAsSavings: Bool
         var expectedAnnualReturn: Double, monthlyContribution: Double
         var isLeftoverDestination: Bool, isArchived: Bool
+        /// Added with categories and descriptions. Optional so version 1 files
+        /// still import — an older backup simply has no note and no category.
+        var note: String?
+        var categoryID: UUID?
+    }
+    struct CategoryDTO: Codable {
+        var id: UUID, name: String, sortOrder: Int
+        var defaultIncludeInUsable: Bool, defaultCountsAsSavings: Bool
+        var defaultAnnualReturn: Double
     }
     struct RecordDTO: Codable {
         var id: UUID, date: Date, createdAt: Date, note: String?, balances: [String: Double]
@@ -15,24 +24,27 @@ struct BackupFile: Codable {
         var targetNetWorth: Double, monthlyNetIncome: Double
         var maxMonthlyExpenses: Double, projectionHorizonMonths: Int
     }
-    var version = 1
+    var version = 2
     var accounts: [AccountDTO]
     var records: [RecordDTO]
     var settings: SettingsDTO
+    var categories: [CategoryDTO]?
 }
 
 enum BackupService {
     static func export(accounts: [Account], records: [BalanceRecord],
-                       settings: AppSettings) throws -> Data {
+                       settings: AppSettings,
+                       categories: [AccountCategory] = []) throws -> Data {
         let file = BackupFile(
             accounts: accounts.map {
-                .init(id: $0.id, name: $0.name, kind: $0.kind.rawValue, colorHex: $0.colorHex,
+                .init(id: $0.id, name: $0.name, kind: $0.kindRaw, colorHex: $0.colorHex,
                       sortOrder: $0.sortOrder, includeInUsable: $0.includeInUsable,
                       countsAsSavings: $0.countsAsSavings,
                       expectedAnnualReturn: $0.expectedAnnualReturn,
                       monthlyContribution: $0.monthlyContribution,
                       isLeftoverDestination: $0.isLeftoverDestination,
-                      isArchived: $0.isArchived)
+                      isArchived: $0.isArchived,
+                      note: $0.note, categoryID: $0.categoryID)
             },
             records: records.map { record in
                 var balances: [String: Double] = [:]
@@ -43,7 +55,13 @@ enum BackupService {
             settings: .init(targetNetWorth: settings.targetNetWorth,
                             monthlyNetIncome: settings.monthlyNetIncome,
                             maxMonthlyExpenses: settings.maxMonthlyExpenses,
-                            projectionHorizonMonths: settings.projectionHorizonMonths))
+                            projectionHorizonMonths: settings.projectionHorizonMonths),
+            categories: categories.map {
+                .init(id: $0.id, name: $0.name, sortOrder: $0.sortOrder,
+                      defaultIncludeInUsable: $0.defaultIncludeInUsable,
+                      defaultCountsAsSavings: $0.defaultCountsAsSavings,
+                      defaultAnnualReturn: $0.defaultAnnualReturn)
+            })
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -66,10 +84,37 @@ enum BackupService {
         for settings in (try? context.fetch(FetchDescriptor<AppSettings>())) ?? [] {
             context.delete(settings)
         }
+        for category in (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? [] {
+            context.delete(category)
+        }
+
+        // Version 1 files carry no categories; seed the defaults so their
+        // accounts can still be mapped onto a type by their old kind.
+        var categoriesByName: [String: AccountCategory] = [:]
+        if let dtos = file.categories, !dtos.isEmpty {
+            for dto in dtos {
+                let category = AccountCategory(
+                    id: dto.id, name: dto.name, sortOrder: dto.sortOrder,
+                    defaultIncludeInUsable: dto.defaultIncludeInUsable,
+                    defaultCountsAsSavings: dto.defaultCountsAsSavings,
+                    defaultAnnualReturn: dto.defaultAnnualReturn)
+                context.insert(category)
+                categoriesByName[dto.name] = category
+            }
+        } else {
+            for category in AccountCategory.seedDefaults(into: context) {
+                categoriesByName[category.name] = category
+            }
+        }
+        let legacyNames = Dictionary(uniqueKeysWithValues:
+            AccountCategory.templates.map { ($0.legacyKey, $0.name) })
 
         for dto in file.accounts {
+            let resolved: UUID? = dto.categoryID
+                ?? categoriesByName[legacyNames[dto.kind] ?? "Main"]?.id
             let account = Account(
-                id: dto.id, name: dto.name, kind: AccountKind(rawValue: dto.kind) ?? .main,
+                id: dto.id, name: dto.name, note: dto.note ?? "",
+                categoryID: resolved, legacyKind: dto.kind,
                 colorHex: dto.colorHex, sortOrder: dto.sortOrder,
                 includeInUsable: dto.includeInUsable, countsAsSavings: dto.countsAsSavings,
                 expectedAnnualReturn: dto.expectedAnnualReturn,

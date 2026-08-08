@@ -150,6 +150,50 @@ struct NameField: View {
     }
 }
 
+/// A quiet, wide note field. Reads as secondary text until you interact with it,
+/// so a description never competes with the account's name or balance.
+struct DescriptionField: View {
+    let note: String
+    var width: CGFloat = 320
+    var onCommit: (String) -> Void
+
+    @FocusState private var focused: Bool
+    @State private var hovering = false
+    @State private var text: String = ""
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Theme.fieldRadius, style: .continuous)
+    }
+
+    var body: some View {
+        TextField("Add a description…", text: $text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(focused ? Color.ftInk : Color.ftInkSecondary)
+            .focused($focused)
+            .onSubmit { commitIfChanged() }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(width: width, alignment: .leading)
+            .background(focused || hovering ? Color.ftSurfaceAlt : .clear, in: shape)
+            .overlay(shape.strokeBorder(
+                focused ? Color.ftAccent : (hovering ? Color.ftHairlineStrong : .clear),
+                lineWidth: focused ? 1.5 : 1))
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.13), value: focused)
+            .animation(.easeOut(duration: 0.13), value: hovering)
+            .onAppear { text = note }
+            .onChange(of: note) { _, new in if !focused { text = new } }
+            .onChange(of: focused) { _, isFocused in if !isFocused { commitIfChanged() } }
+    }
+
+    private func commitIfChanged() {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != note else { return }
+        onCommit(trimmed)
+    }
+}
+
 /// Same treatment for whole numbers, clamped to a sensible range.
 struct IntField: View {
     @Binding var value: Int

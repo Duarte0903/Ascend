@@ -10,19 +10,19 @@ enum WorkbookFixture {
     static let edenredID = UUID()
 
     static let accounts: [AccountInfo] = [
-        AccountInfo(id: cttID, name: "Banco CTT", kind: .main, colorHex: "#2E7D32",
+        AccountInfo(id: cttID, name: "Banco CTT", colorHex: "#2E7D32",
                     sortOrder: 0, includeInUsable: true, countsAsSavings: false,
                     expectedAnnualReturn: 0, monthlyContribution: 0,
                     isLeftoverDestination: true),
-        AccountInfo(id: revolutID, name: "Revolut", kind: .savings, colorHex: "#1565C0",
+        AccountInfo(id: revolutID, name: "Revolut", colorHex: "#1565C0",
                     sortOrder: 1, includeInUsable: true, countsAsSavings: true,
                     expectedAnnualReturn: 0.011, monthlyContribution: 100,
                     isLeftoverDestination: false),
-        AccountInfo(id: xtbID, name: "XTB", kind: .investment, colorHex: "#EF6C00",
+        AccountInfo(id: xtbID, name: "XTB", colorHex: "#EF6C00",
                     sortOrder: 2, includeInUsable: true, countsAsSavings: true,
                     expectedAnnualReturn: 0.07, monthlyContribution: 100,
                     isLeftoverDestination: false),
-        AccountInfo(id: edenredID, name: "Edenred", kind: .restricted, colorHex: "#6A1B9A",
+        AccountInfo(id: edenredID, name: "Edenred", colorHex: "#6A1B9A",
                     sortOrder: 3, includeInUsable: false, countsAsSavings: false,
                     expectedAnnualReturn: 0, monthlyContribution: 0,
                     isLeftoverDestination: false),
