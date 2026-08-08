@@ -1,0 +1,63 @@
+# Ascend is an XcodeGen + xcodebuild project, not a SwiftPM package, so
+# `swift build` has nothing to find. This generates the project and runs the
+# same suite as ./scripts/test.sh.
+
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          echo "--- installed Xcodes ---"
+          ls -d /Applications/Xcode*.app 2>/dev/null || echo "none found"
+          echo "--- active ---"
+          xcodebuild -version
+
+      # Runners often default to an older Xcode than they ship with, and the
+      # project needs a recent SDK.
+      - name: Select newest Xcode
+        run: |
+          NEWEST=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Selecting $NEWEST"
+          sudo xcode-select -s "$NEWEST"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild -project Ascend.xcodeproj \
+                     -scheme Ascend \
+                     -destination 'platform=macOS' \
+                     -resultBundlePath TestResults.xcresult \
+                     test
+
+      - name: Upload results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
