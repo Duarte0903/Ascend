@@ -53,13 +53,15 @@ struct ProjectionsView: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                     GridRow {
                         Text("Monthly Net Income")
-                        numberField(get: { settings.monthlyNetIncome },
-                                    set: { settings.monthlyNetIncome = $0 })
+                        numberField(Binding(
+                            get: { settings.monthlyNetIncome },
+                            set: { settings.monthlyNetIncome = $0; try? context.save() }))
                     }
                     GridRow {
                         Text("Max Monthly Expenses")
-                        numberField(get: { settings.maxMonthlyExpenses },
-                                    set: { settings.maxMonthlyExpenses = $0 })
+                        numberField(Binding(
+                            get: { settings.maxMonthlyExpenses },
+                            set: { settings.maxMonthlyExpenses = $0; try? context.save() }))
                     }
                     GridRow {
                         Text("Projection Horizon (months)")
@@ -161,10 +163,8 @@ struct ProjectionsView: View {
         }
     }
 
-    private func numberField(get: @escaping () -> Double,
-                             set: @escaping (Double) -> Void) -> some View {
-        TextField("", value: Binding(get: get, set: { set($0); try? context.save() }),
-                  format: .number.precision(.fractionLength(0)))
+    private func numberField(_ value: Binding<Double>) -> some View {
+        TextField("", value: value, format: .number.precision(.fractionLength(0)))
             .multilineTextAlignment(.trailing)
             .textFieldStyle(.roundedBorder)
             .frame(width: 120)
