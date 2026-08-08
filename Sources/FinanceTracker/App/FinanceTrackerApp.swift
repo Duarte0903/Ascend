@@ -14,7 +14,9 @@ struct FinanceTrackerApp: App {
         } catch {
             fatalError("Could not create the data store: \(error)")
         }
-        SeedData.seedIfNeeded(ModelContext(container))
+        let context = ModelContext(container)
+        SeedData.seedIfNeeded(context)
+        SeedData.migrateLegacyColors(context)
     }
 
     var body: some Scene {

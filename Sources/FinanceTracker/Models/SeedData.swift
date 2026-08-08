@@ -7,16 +7,16 @@ enum SeedData {
         let existing = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         guard existing.isEmpty else { return }
 
-        let ctt = Account(name: "Banco CTT", kind: .main, colorHex: "#2E7D32", sortOrder: 0,
+        let ctt = Account(name: "Banco CTT", kind: .main, colorHex: "#1F6E8C", sortOrder: 0,
                           includeInUsable: true, countsAsSavings: false,
                           isLeftoverDestination: true)
-        let revolut = Account(name: "Revolut", kind: .savings, colorHex: "#1565C0", sortOrder: 1,
+        let revolut = Account(name: "Revolut", kind: .savings, colorHex: "#7A5EA6", sortOrder: 1,
                               includeInUsable: true, countsAsSavings: true,
                               expectedAnnualReturn: 0.011, monthlyContribution: 100)
-        let xtb = Account(name: "XTB", kind: .investment, colorHex: "#EF6C00", sortOrder: 2,
+        let xtb = Account(name: "XTB", kind: .investment, colorHex: "#C2703D", sortOrder: 2,
                           includeInUsable: true, countsAsSavings: true,
                           expectedAnnualReturn: 0.07, monthlyContribution: 100)
-        let edenred = Account(name: "Edenred", kind: .restricted, colorHex: "#6A1B9A", sortOrder: 3,
+        let edenred = Account(name: "Edenred", kind: .restricted, colorHex: "#A34A5E", sortOrder: 3,
                               includeInUsable: false, countsAsSavings: false)
         for account in [ctt, revolut, xtb, edenred] { context.insert(account) }
 
@@ -47,6 +47,25 @@ enum SeedData {
         context.insert(AppSettings(targetNetWorth: 25_000, monthlyNetIncome: 1_117,
                                    maxMonthlyExpenses: 200, projectionHorizonMonths: 60))
         try? context.save()
+    }
+
+    /// Moves accounts still carrying the original seed colours onto the current
+    /// palette. Only exact old defaults are touched, so a colour you chose
+    /// yourself is never overwritten, and re-running this changes nothing.
+    static func migrateLegacyColors(_ context: ModelContext) {
+        let replacements = ["#2E7D32": "#1F6E8C",
+                            "#1565C0": "#7A5EA6",
+                            "#EF6C00": "#C2703D",
+                            "#6A1B9A": "#A34A5E"]
+        guard let accounts = try? context.fetch(FetchDescriptor<Account>()) else { return }
+        var changed = false
+        for account in accounts {
+            if let replacement = replacements[account.colorHex.uppercased()] {
+                account.colorHex = replacement
+                changed = true
+            }
+        }
+        if changed { try? context.save() }
     }
 
     static func settings(in context: ModelContext) -> AppSettings {

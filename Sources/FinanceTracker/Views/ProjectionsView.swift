@@ -19,16 +19,14 @@ struct ProjectionsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Theme.gap) {
                 if !projection.assumptions.hasLeftoverDestination {
-                    Label("No leftover destination is set, so the monthly surplus is not being allocated. Pick one on the Accounts screen.",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.yellow.opacity(0.2), in: RoundedRectangle(cornerRadius: 10))
+                    Callout(text: "No account is set to receive the monthly leftover, so the surplus isn't being allocated. Pick one on the Accounts screen.",
+                            systemImage: "exclamationmark.triangle.fill",
+                            tint: .orange)
                 }
 
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .top, spacing: Theme.gap) {
                     assumptionsCard
                     outlookCard
                 }
@@ -37,144 +35,212 @@ struct ProjectionsView: View {
                     ContentUnavailableView("Nothing to project yet",
                                            systemImage: "chart.line.uptrend.xyaxis",
                                            description: Text("Add a record on the Balances screen."))
-                        .frame(height: 220)
+                        .frame(height: 240)
                 } else {
                     forecastChart
                     monthTable
                 }
             }
-            .padding(20)
+            .padding(Theme.screenPadding)
         }
     }
 
+    // MARK: - Assumptions
+
     private var assumptionsCard: some View {
-        CardSection("Assumptions", subtitle: "Grey rows are derived from the others.") {
-            VStack(alignment: .leading, spacing: 12) {
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
-                    GridRow {
-                        Text("Monthly Net Income")
-                        numberField(Binding(
-                            get: { settings.monthlyNetIncome },
-                            set: { settings.monthlyNetIncome = $0; try? context.save() }))
-                    }
-                    GridRow {
-                        Text("Max Monthly Expenses")
-                        numberField(Binding(
-                            get: { settings.maxMonthlyExpenses },
-                            set: { settings.maxMonthlyExpenses = $0; try? context.save() }))
-                    }
-                    GridRow {
-                        Text("Projection Horizon (months)")
-                        TextField("", value: Binding(
-                            get: { settings.projectionHorizonMonths },
-                            set: { settings.projectionHorizonMonths = max(1, min(600, $0))
-                                   try? context.save() }),
-                            format: .number)
-                            .multilineTextAlignment(.trailing)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 120)
-                    }
-                    Divider().gridCellUnsizedAxes(.horizontal)
-                    derivedRow("Total Invested / month",
-                               Money.currency(projection.assumptions.totalInvestedPerMonth))
-                    derivedRow("Leftover / month",
-                               Money.currency(projection.assumptions.leftoverPerMonth))
-                    derivedRow("Savings Rate (of income)",
-                               Money.percent(projection.assumptions.savingsRateOfIncome))
+        CardSection("Assumptions", subtitle: "Grey rows are worked out from the others") {
+            Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 11) {
+                GridRow {
+                    Text("Monthly net income").font(.system(size: 12.5))
+                    MoneyField(value: Binding(
+                        get: { settings.monthlyNetIncome },
+                        set: { settings.monthlyNetIncome = max(0, $0); try? context.save() }),
+                        decimals: 0)
                 }
-                Text("Per-account contributions and expected returns live on the Accounts screen.")
-                    .font(.caption).foregroundStyle(.secondary)
+                GridRow {
+                    Text("Max monthly expenses").font(.system(size: 12.5))
+                    MoneyField(value: Binding(
+                        get: { settings.maxMonthlyExpenses },
+                        set: { settings.maxMonthlyExpenses = max(0, $0); try? context.save() }),
+                        decimals: 0)
+                }
+                GridRow {
+                    Text("Projection horizon (months)").font(.system(size: 12.5))
+                    IntField(value: Binding(
+                        get: { settings.projectionHorizonMonths },
+                        set: { settings.projectionHorizonMonths = $0; try? context.save() }))
+                }
+
+                Divider().gridCellUnsizedAxes(.horizontal).padding(.vertical, 2)
+
+                derivedRow("Total invested / month",
+                           Money.currency(projection.assumptions.totalInvestedPerMonth))
+                derivedRow(leftoverLabel,
+                           Money.currency(projection.assumptions.leftoverPerMonth))
+                derivedRow("Savings rate of income",
+                           Money.percent(projection.assumptions.savingsRateOfIncome))
             }
+
+            Text("Per-account contributions and expected returns live on the Accounts screen.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.ftInkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
+
+    private var leftoverLabel: String {
+        if let name = activeAccounts.first(where: \.isLeftoverDestination)?.name {
+            return "Leftover → \(name)"
+        }
+        return "Leftover / month"
+    }
+
+    private func derivedRow(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Color.ftInkTertiary)
+            DerivedText(text: value, width: 108)
+        }
+    }
+
+    // MARK: - Outlook
 
     private var outlookCard: some View {
         CardSection("Outlook") {
-            VStack(spacing: 12) {
-                KPITile(title: "Projected in 1 Year",
-                        value: Money.currency(projection.netWorth(atMonth: 12)))
-                KPITile(title: "Projected in 3 Years",
-                        value: Money.currency(projection.netWorth(atMonth: 36)))
-                KPITile(title: "Projected in 5 Years",
-                        value: Money.currency(projection.netWorth(atMonth: 60)))
-                KPITile(title: "At Horizon (\(settings.projectionHorizonMonths) mo)",
-                        value: Money.currency(projection.months.last?.netWorth))
-                KPITile(title: "Months to Goal",
-                        value: projection.monthsToGoal.map(String.init) ?? Money.dash,
-                        caption: projection.monthsToGoal == nil
-                            ? "Not reached within the horizon" : nil)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                MetricTile(title: "In 1 year", value: Money.currency(projection.netWorth(atMonth: 12)))
+                MetricTile(title: "In 3 years", value: Money.currency(projection.netWorth(atMonth: 36)))
+                MetricTile(title: "In 5 years", value: Money.currency(projection.netWorth(atMonth: 60)))
+                MetricTile(title: "Months to goal",
+                           value: projection.monthsToGoal.map(String.init) ?? Money.dash,
+                           caption: goalDateCaption,
+                           valueColor: projection.monthsToGoal == nil ? .ftInkTertiary : .ftPositive)
             }
         }
-        .frame(width: 260)
+        .frame(width: 330)
     }
 
+    private var goalDateCaption: String? {
+        guard let months = projection.monthsToGoal,
+              let month = projection.months.first(where: { $0.month == months })
+        else { return "Not reached within the horizon" }
+        return month.date.formatted(.dateTime.month(.abbreviated).year())
+    }
+
+    // MARK: - Forecast
+
     private var forecastChart: some View {
-        CardSection("Projected Net Worth") {
+        CardSection("Projected net worth", subtitle: forecastSubtitle) {
             Chart {
                 ForEach(projection.months) { month in
+                    AreaMark(x: .value("Month", month.month),
+                             y: .value("Net worth", month.netWorth))
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.ftAccent.opacity(0.24), Color.ftAccent.opacity(0.01)],
+                            startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                }
+                ForEach(projection.months) { month in
                     LineMark(x: .value("Month", month.month),
-                             y: .value("Net Worth", month.netWorth))
+                             y: .value("Net worth", month.netWorth))
+                        .foregroundStyle(Color.ftAccent)
+                        .lineStyle(StrokeStyle(lineWidth: 2.6, lineCap: .round))
+                        .interpolationMethod(.monotone)
                 }
                 RuleMark(y: .value("Target", settings.targetNetWorth))
-                    .foregroundStyle(.gray)
-                    .lineStyle(StrokeStyle(dash: [4, 4]))
+                    .foregroundStyle(Color.ftInkTertiary)
+                    .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [5, 5]))
                     .annotation(position: .top, alignment: .leading) {
                         Text("Target \(Money.currency(settings.targetNetWorth))")
-                            .font(.caption2).foregroundStyle(.secondary)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Color.ftInkTertiary)
                     }
+                if let months = projection.monthsToGoal,
+                   let crossing = projection.months.first(where: { $0.month == months }) {
+                    PointMark(x: .value("Month", crossing.month),
+                              y: .value("Net worth", crossing.netWorth))
+                        .foregroundStyle(Color.ftPositive)
+                        .symbolSize(110)
+                        .annotation(position: .bottom) {
+                            Text("month \(months)")
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(Color.ftPositive)
+                        }
+                }
+            }
+            .chartXAxis {
+                AxisMarks { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                        .foregroundStyle(Color.ftHairline)
+                    AxisValueLabel().font(.system(size: 10))
+                        .foregroundStyle(Color.ftInkTertiary)
+                }
             }
             .chartYAxis {
-                AxisMarks(format: FloatingPointFormatStyle<Double>.number
-                    .notation(.compactName))
+                AxisMarks(position: .leading) { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                        .foregroundStyle(Color.ftHairline)
+                    AxisValueLabel().font(.system(size: 10))
+                        .foregroundStyle(Color.ftInkTertiary)
+                }
             }
             .frame(height: 250)
         }
     }
 
+    private var forecastSubtitle: String {
+        let horizon = settings.projectionHorizonMonths
+        if let months = projection.monthsToGoal {
+            return "\(horizon) months, crossing \(Money.currency(settings.targetNetWorth)) at month \(months)"
+        }
+        return "\(horizon) months — target not reached within the horizon"
+    }
+
+    // MARK: - Month table
+
     private var monthTable: some View {
-        CardSection("Month by Month") {
+        CardSection("Month by month") {
             ScrollView(.vertical) {
-                Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 6) {
+                Grid(alignment: .trailing, horizontalSpacing: 16, verticalSpacing: 7) {
                     GridRow {
                         Text("Month").gridColumnAlignment(.leading)
                         Text("Date").gridColumnAlignment(.leading)
                         ForEach(activeAccounts) { Text($0.name) }
-                        Text("Net Worth")
+                        Text("Net worth")
                         Text("Usable")
                     }
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(Color.ftInkTertiary)
+
                     Divider().gridCellUnsizedAxes(.horizontal)
+
                     ForEach(projection.months) { month in
                         GridRow {
-                            Text("\(month.month)").gridColumnAlignment(.leading)
+                            Text("\(month.month)")
+                                .gridColumnAlignment(.leading)
+                                .foregroundStyle(Color.ftInkTertiary)
                             Text(month.date, format: .dateTime.month(.abbreviated).year())
                                 .gridColumnAlignment(.leading)
+                                .foregroundStyle(Color.ftInkSecondary)
                             ForEach(activeAccounts) { account in
                                 Text(Money.currency(month.balances[account.id] ?? 0))
+                                    .foregroundStyle(Color.ftInkSecondary)
                             }
-                            Text(Money.currency(month.netWorth)).fontWeight(.medium)
+                            Text(Money.currency(month.netWorth))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.ftInk)
                             Text(Money.currency(month.usable))
+                                .foregroundStyle(Color.ftInkSecondary)
                         }
-                        .font(.system(.caption, design: .rounded))
+                        .font(.system(size: 11.5, design: .rounded))
+                        .monospacedDigit()
                     }
                 }
             }
             .frame(maxHeight: 320)
-        }
-    }
-
-    private func numberField(_ value: Binding<Double>) -> some View {
-        TextField("", value: value, format: .number.precision(.fractionLength(0)))
-            .multilineTextAlignment(.trailing)
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 120)
-    }
-
-    private func derivedRow(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
-            Text(value).foregroundStyle(.secondary)
-                .frame(width: 120, alignment: .trailing)
         }
     }
 }

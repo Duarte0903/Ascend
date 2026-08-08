@@ -6,6 +6,8 @@ struct BalancesView: View {
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
 
+    @State private var hoveredRow: UUID?
+
     private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
     private var derived: [DerivedRecord] {
@@ -15,56 +17,69 @@ struct BalancesView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
-            if records.isEmpty {
-                ContentUnavailableView("No records yet",
-                                       systemImage: "tablecells",
-                                       description: Text("Add your first record to start tracking."))
-            } else {
-                ScrollView([.horizontal, .vertical]) {
-                    Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 8) {
-                        headerRow
-                        Divider().gridCellUnsizedAxes(.horizontal)
-                        ForEach(derived) { row in
-                            rowView(row)
-                        }
-                    }
-                    .padding(16)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.gap) {
+                Callout(text: "Boxed cells are yours to fill. Everything shaded to the right is calculated and updates as you type.")
+
+                if records.isEmpty {
+                    ContentUnavailableView("No records yet",
+                                           systemImage: "tablecells",
+                                           description: Text("Add your first record to start tracking."))
+                        .frame(height: 300)
+                } else {
+                    table
                 }
+            }
+            .padding(Theme.screenPadding)
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                Button("Duplicate Last", systemImage: "doc.on.doc") { duplicateLast() }
+                    .disabled(records.isEmpty)
+                Button("Add Record", systemImage: "plus") { addRecord() }
+                    .keyboardShortcut("n")
             }
         }
     }
 
-    private var header: some View {
-        HStack {
-            Text("Editable columns are boxed; derived columns are grey and update automatically.")
-                .font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Button("Duplicate Last", systemImage: "doc.on.doc") { duplicateLast() }
-                .disabled(records.isEmpty)
-            Button("Add Record", systemImage: "plus") { addRecord() }
-                .keyboardShortcut("n")
+    private var table: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 0) {
+                headerRow
+                Divider().gridCellUnsizedAxes(.horizontal)
+                ForEach(Array(derived.enumerated()), id: \.element.id) { index, row in
+                    rowView(row)
+                    if index < derived.count - 1 {
+                        Divider().gridCellUnsizedAxes(.horizontal).opacity(0.6)
+                    }
+                }
+            }
+            .padding(Theme.cardPadding)
         }
-        .padding(16)
+        .ftCard(padding: 0)
     }
 
     private var headerRow: some View {
         GridRow {
-            Text("Date").frame(width: 110, alignment: .leading)
+            Text("Date").frame(width: 108, alignment: .leading)
             ForEach(activeAccounts) { account in
-                Text(account.name).frame(width: 110, alignment: .trailing)
+                HStack(spacing: 6) {
+                    Circle().fill(Color(hex: account.colorHex)).frame(width: 7, height: 7)
+                    Text(account.name)
+                }
+                .frame(width: 112, alignment: .trailing)
             }
-            Text("Total").frame(width: 100)
-            Text("Usable").frame(width: 100)
-            Text("Change").frame(width: 90)
-            Text("Change %").frame(width: 80)
-            Text("Savings Rate").frame(width: 90)
-            Color.clear.frame(width: 24)
+            Text("Total").frame(width: 96)
+            Text("Usable").frame(width: 96)
+            Text("Change").frame(width: 92)
+            Text("Change %").frame(width: 82)
+            Text("Savings rate").frame(width: 92)
+            Color.clear.frame(width: 22)
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
+        .font(.system(size: 10.5, weight: .semibold))
+        .tracking(0.5)
+        .foregroundStyle(Color.ftInkTertiary)
+        .padding(.bottom, 8)
     }
 
     @ViewBuilder
@@ -76,43 +91,52 @@ struct BalancesView: View {
                     set: { record.date = $0; try? context.save() }),
                     displayedComponents: .date)
                     .labelsHidden()
-                    .frame(width: 110)
+                    .datePickerStyle(.field)
+                    .frame(width: 108)
 
                 ForEach(activeAccounts) { account in
-                    TextField("", value: Binding(
+                    MoneyField(value: Binding(
                         get: { record.amount(for: account.id) },
                         set: { record.setAmount($0, for: account.id); try? context.save() }),
-                        format: .number.precision(.fractionLength(2)))
-                        .multilineTextAlignment(.trailing)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 110)
+                        width: 112)
                 }
 
-                derivedCell(Money.currency(row.total), width: 100)
-                derivedCell(Money.currency(row.usable), width: 100)
-                derivedCell(Money.currency(row.changeAmount), width: 90,
-                            tint: (row.changeAmount ?? 0) < 0 ? .red : .primary)
-                derivedCell(Money.percent(row.changePercent), width: 80)
-                derivedCell(Money.percent(row.savingsRate), width: 90)
+                DerivedText(text: Money.currency(row.total), width: 96, emphasis: true)
+                DerivedText(text: Money.currency(row.usable), width: 96)
+                DerivedText(text: signed(row.changeAmount), width: 92,
+                            tint: tint(for: row.changeAmount))
+                DerivedText(text: signed(row.changePercent, percent: true), width: 82,
+                            tint: tint(for: row.changePercent))
+                DerivedText(text: Money.percent(row.savingsRate), width: 92,
+                            tint: (row.savingsRate ?? 0) > 0 ? .ftPositive : nil)
 
                 Button {
                     context.delete(record)
                     try? context.save()
                 } label: {
-                    Image(systemName: "trash").foregroundStyle(.secondary)
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(hoveredRow == row.id ? Color.ftNegative : Color.ftInkTertiary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
                 .help("Delete this record")
-                .frame(width: 24)
+                .frame(width: 22)
             }
+            .padding(.vertical, 5)
+            .background(hoveredRow == row.id ? Color.ftSurfaceAlt : .clear)
+            .onHover { hoveredRow = $0 ? row.id : (hoveredRow == row.id ? nil : hoveredRow) }
         }
     }
 
-    private func derivedCell(_ text: String, width: CGFloat, tint: Color = .primary) -> some View {
-        Text(text)
-            .font(.system(.body, design: .rounded))
-            .foregroundStyle(tint)
-            .frame(width: width, alignment: .trailing)
+    private func signed(_ value: Double?, percent: Bool = false) -> String {
+        guard let value else { return Money.dash }
+        let text = percent ? Money.percent(value) : Money.currency(value)
+        return value > 0 ? "+" + text : text
+    }
+
+    private func tint(for value: Double?) -> Color? {
+        guard let value, value != 0 else { return nil }
+        return value > 0 ? .ftPositive : .ftNegative
     }
 
     private func addRecord() {

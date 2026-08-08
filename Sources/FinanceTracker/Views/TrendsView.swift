@@ -19,83 +19,113 @@ struct TrendsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Theme.gap) {
                 if derived.isEmpty {
                     ContentUnavailableView("Nothing to chart yet",
                                            systemImage: "chart.xyaxis.line",
                                            description: Text("Add records on the Balances screen."))
-                        .frame(height: 300)
+                        .frame(height: 320)
                 } else {
-                    stackedChart
-                    comparisonChart
-                    growthChart
-                    savingsChart
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: Theme.gap)],
+                              spacing: Theme.gap) {
+                        stackedChart
+                        comparisonChart
+                        growthChart
+                        savingsChart
+                    }
                 }
             }
-            .padding(20)
+            .padding(Theme.screenPadding)
         }
     }
 
     private var stackedChart: some View {
-        CardSection("Account Balances Over Time (stacked)") {
+        CardSection("Account balances over time", subtitle: "Stacked, every active account") {
             Chart {
                 ForEach(derived) { row in
                     ForEach(activeAccounts) { account in
                         AreaMark(x: .value("Date", row.date),
-                                 y: .value("Amount", row.amount(for: account.id)))
+                                 y: .value("Amount", row.amount(for: account.id)),
+                                 stacking: .standard)
                             .foregroundStyle(by: .value("Account", account.name))
+                            .interpolationMethod(.monotone)
                     }
                 }
             }
             .chartForegroundStyleScale(range: accountColors)
-            .frame(height: 240)
+            .chartYAxis { softAxis }
+            .chartLegend(position: .bottom, alignment: .leading, spacing: 10)
+            .frame(height: 230)
         }
     }
 
     private var comparisonChart: some View {
-        CardSection("Account Comparison") {
+        CardSection("Account comparison", subtitle: "Each account on its own line") {
             Chart {
                 ForEach(derived) { row in
                     ForEach(activeAccounts) { account in
                         LineMark(x: .value("Date", row.date),
                                  y: .value("Amount", row.amount(for: account.id)))
                             .foregroundStyle(by: .value("Account", account.name))
-                            .symbol(by: .value("Account", account.name))
+                            .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                            .interpolationMethod(.monotone)
                     }
                 }
             }
             .chartForegroundStyleScale(range: accountColors)
-            .frame(height: 240)
+            .chartYAxis { softAxis }
+            .chartLegend(position: .bottom, alignment: .leading, spacing: 10)
+            .frame(height: 230)
         }
     }
 
     private var growthChart: some View {
-        CardSection("Growth Rate per Record") {
+        CardSection("Growth rate per record", subtitle: "Percentage change between entries") {
             Chart(derived.filter { $0.changePercent != nil }) { row in
                 LineMark(x: .value("Date", row.date),
-                         y: .value("Change %", (row.changePercent ?? 0) * 100))
-                    .symbol(.circle)
+                         y: .value("Change", (row.changePercent ?? 0) * 100))
+                    .foregroundStyle(Color.ftAccent)
+                    .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                    .interpolationMethod(.monotone)
+                PointMark(x: .value("Date", row.date),
+                          y: .value("Change", (row.changePercent ?? 0) * 100))
+                    .foregroundStyle(Color.ftAccent)
+                    .symbolSize(55)
             }
-            .chartYAxis {
-                AxisMarks(format: FloatingPointFormatStyle<Double>.number
-                    .precision(.fractionLength(1)))
-            }
-            .frame(height: 200)
+            .chartYAxis { softAxis }
+            .frame(height: 210)
         }
     }
 
     private var savingsChart: some View {
-        CardSection("Savings Rate per Record") {
+        CardSection("Savings rate per record", subtitle: savingsSubtitle) {
             Chart(derived.filter { $0.savingsRate != nil }) { row in
                 BarMark(x: .value("Date", row.date, unit: .day),
-                        y: .value("Savings Rate", (row.savingsRate ?? 0) * 100))
-                    .foregroundStyle(.teal)
+                        y: .value("Savings rate", (row.savingsRate ?? 0) * 100),
+                        width: .fixed(26))
+                    .foregroundStyle(LinearGradient(
+                        colors: [Color(hex: Theme.accountPalette[1]),
+                                 Color(hex: Theme.accountPalette[1]).opacity(0.55)],
+                        startPoint: .top, endPoint: .bottom))
+                    .cornerRadius(5)
             }
-            .chartYAxis {
-                AxisMarks(format: FloatingPointFormatStyle<Double>.number
-                    .precision(.fractionLength(1)))
-            }
-            .frame(height: 200)
+            .chartYAxis { softAxis }
+            .frame(height: 210)
+        }
+    }
+
+    private var savingsSubtitle: String {
+        let names = activeAccounts.filter(\.countsAsSavings).map(\.name)
+        guard !names.isEmpty else { return "No accounts are flagged as savings" }
+        return "Money moved into " + names.joined(separator: " and ")
+    }
+
+    private var softAxis: some AxisContent {
+        AxisMarks(position: .leading) { _ in
+            AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                .foregroundStyle(Color.ftHairline)
+            AxisValueLabel().font(.system(size: 10))
+                .foregroundStyle(Color.ftInkTertiary)
         }
     }
 }
