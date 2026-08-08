@@ -20,21 +20,33 @@ struct BackupFile: Codable {
     struct RecordDTO: Codable {
         var id: UUID, date: Date, createdAt: Date, note: String?, balances: [String: Double]
     }
+    struct ExpenseDTO: Codable {
+        var id: UUID, name: String, note: String, amount: Double
+        var frequency: String, categoryID: UUID?, isActive: Bool, sortOrder: Int
+    }
+    struct ExpenseCategoryDTO: Codable {
+        var id: UUID, name: String, colorHex: String, sortOrder: Int
+    }
     struct SettingsDTO: Codable {
         var targetNetWorth: Double, monthlyNetIncome: Double
         var maxMonthlyExpenses: Double, projectionHorizonMonths: Int
     }
-    var version = 2
+    var version = 3
     var accounts: [AccountDTO]
     var records: [RecordDTO]
     var settings: SettingsDTO
     var categories: [CategoryDTO]?
+    /// Added with the Expenses screen; absent in older files.
+    var expenses: [ExpenseDTO]?
+    var expenseCategories: [ExpenseCategoryDTO]?
 }
 
 enum BackupService {
     static func export(accounts: [Account], records: [BalanceRecord],
                        settings: AppSettings,
-                       categories: [AccountCategory] = []) throws -> Data {
+                       categories: [AccountCategory] = [],
+                       expenses: [Expense] = [],
+                       expenseCategories: [ExpenseCategory] = []) throws -> Data {
         let file = BackupFile(
             accounts: accounts.map {
                 .init(id: $0.id, name: $0.name, kind: $0.kindRaw, colorHex: $0.colorHex,
@@ -61,6 +73,14 @@ enum BackupService {
                       defaultIncludeInUsable: $0.defaultIncludeInUsable,
                       defaultCountsAsSavings: $0.defaultCountsAsSavings,
                       defaultAnnualReturn: $0.defaultAnnualReturn)
+            },
+            expenses: expenses.map {
+                .init(id: $0.id, name: $0.name, note: $0.note, amount: $0.amount,
+                      frequency: $0.frequency.rawValue, categoryID: $0.categoryID,
+                      isActive: $0.isActive, sortOrder: $0.sortOrder)
+            },
+            expenseCategories: expenseCategories.map {
+                .init(id: $0.id, name: $0.name, colorHex: $0.colorHex, sortOrder: $0.sortOrder)
             })
 
         let encoder = JSONEncoder()
@@ -85,6 +105,12 @@ enum BackupService {
             context.delete(settings)
         }
         for category in (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? [] {
+            context.delete(category)
+        }
+        for expense in (try? context.fetch(FetchDescriptor<Expense>())) ?? [] {
+            context.delete(expense)
+        }
+        for category in (try? context.fetch(FetchDescriptor<ExpenseCategory>())) ?? [] {
             context.delete(category)
         }
 
@@ -133,6 +159,18 @@ enum BackupService {
                 }
             }
         }
+        for dto in file.expenseCategories ?? [] {
+            context.insert(ExpenseCategory(id: dto.id, name: dto.name,
+                                          colorHex: dto.colorHex, sortOrder: dto.sortOrder))
+        }
+        for dto in file.expenses ?? [] {
+            context.insert(Expense(id: dto.id, name: dto.name, note: dto.note,
+                                   amount: dto.amount,
+                                   frequency: ExpenseFrequency(rawValue: dto.frequency) ?? .monthly,
+                                   categoryID: dto.categoryID, isActive: dto.isActive,
+                                   sortOrder: dto.sortOrder))
+        }
+
         context.insert(AppSettings(
             targetNetWorth: file.settings.targetNetWorth,
             monthlyNetIncome: file.settings.monthlyNetIncome,

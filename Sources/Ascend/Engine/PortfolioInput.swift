@@ -37,10 +37,28 @@ struct RecordInput: Identifiable, Hashable, Sendable {
 struct PortfolioInput: Sendable {
     var accounts: [AccountInfo]
     var records: [RecordInput]
+    var expenses: [ExpenseInput]
     var targetNetWorth: Double
     var monthlyNetIncome: Double
-    var maxMonthlyExpenses: Double
     var projectionHorizonMonths: Int
+
+    init(accounts: [AccountInfo], records: [RecordInput],
+         expenses: [ExpenseInput] = [],
+         targetNetWorth: Double, monthlyNetIncome: Double,
+         projectionHorizonMonths: Int) {
+        self.accounts = accounts
+        self.records = records
+        self.expenses = expenses
+        self.targetNetWorth = targetNetWorth
+        self.monthlyNetIncome = monthlyNetIncome
+        self.projectionHorizonMonths = projectionHorizonMonths
+    }
+
+    /// Derived from the expense list, never typed — the Expenses screen is the
+    /// single source of truth for what a month costs.
+    var maxMonthlyExpenses: Double {
+        expenses.reduce(0) { $0 + $1.monthlyAmount }
+    }
 
     var activeAccountsSorted: [AccountInfo] {
         accounts.sorted { $0.sortOrder < $1.sortOrder }

@@ -5,7 +5,8 @@ import SwiftData
 
 @MainActor
 func inMemoryContext() throws -> ModelContext {
-    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self, BalanceEntry.self, AppSettings.self])
+    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self, BalanceEntry.self,
+                         AppSettings.self, Expense.self, ExpenseCategory.self])
     let container = try ModelContainer(
         for: schema,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true))
@@ -41,7 +42,8 @@ func inMemoryContext() throws -> ModelContext {
     let input = PortfolioStore.input(
         accounts: try context.fetch(FetchDescriptor<Account>()),
         records: try context.fetch(FetchDescriptor<BalanceRecord>()),
-        settings: SeedData.settings(in: context))
+        settings: SeedData.settings(in: context),
+        expenses: try context.fetch(FetchDescriptor<Expense>()))
 
     let derived = LedgerEngine.derive(input)
     let metrics = DashboardMetrics.compute(records: derived)
@@ -59,7 +61,8 @@ func inMemoryContext() throws -> ModelContext {
     let input = PortfolioStore.input(
         accounts: try context.fetch(FetchDescriptor<Account>()),
         records: try context.fetch(FetchDescriptor<BalanceRecord>()),
-        settings: SeedData.settings(in: context))
+        settings: SeedData.settings(in: context),
+        expenses: try context.fetch(FetchDescriptor<Expense>()))
     let projection = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                               from: Date())
     #expect(projection.monthsToGoal == 18)

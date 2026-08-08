@@ -16,7 +16,8 @@ private func seeded() throws -> (PortfolioInput, [DerivedRecord]) {
     let input = PortfolioStore.input(
         accounts: try context.fetch(FetchDescriptor<Account>()),
         records: try context.fetch(FetchDescriptor<BalanceRecord>()),
-        settings: SeedData.settings(in: context))
+        settings: SeedData.settings(in: context),
+        expenses: try context.fetch(FetchDescriptor<Expense>()))
     return (input, LedgerEngine.derive(input))
 }
 

@@ -5,6 +5,7 @@ struct BalancesView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     @State private var hoveredRow: UUID?
 
@@ -25,7 +26,8 @@ struct BalancesView: View {
     private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context)))
+            settings: SeedData.settings(in: context),
+            expenses: expenseItems))
     }
 
     var body: some View {

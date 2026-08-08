@@ -6,6 +6,7 @@ struct TrendsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     @AppStorage("dateRange") private var rangeRaw = DateRangeFilter.all.rawValue
     @State private var hiddenAccounts: Set<UUID> = []
@@ -29,7 +30,8 @@ struct TrendsView: View {
     private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context)))
+            settings: SeedData.settings(in: context),
+            expenses: expenseItems))
     }
 
     private var accountColors: [Color] { activeAccounts.map { Color(hex: $0.colorHex) } }

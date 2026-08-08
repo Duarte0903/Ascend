@@ -6,12 +6,13 @@ struct ProjectionsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     private var settings: AppSettings { SeedData.settings(in: context) }
     private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
     private var projection: Projection {
-        let input = PortfolioStore.input(accounts: accounts, records: records, settings: settings)
+        let input = PortfolioStore.input(accounts: accounts, records: records, settings: settings, expenses: expenseItems)
         return ProjectionEngine.project(input,
                                         records: LedgerEngine.derive(input),
                                         from: Date())
@@ -58,11 +59,11 @@ struct ProjectionsView: View {
                         decimals: 2)
                 }
                 GridRow {
-                    Text("Max monthly expenses").font(.system(size: 12.5))
-                    MoneyField(value: Binding(
-                        get: { settings.maxMonthlyExpenses },
-                        set: { settings.maxMonthlyExpenses = max(0, $0); try? context.save() }),
-                        decimals: 2)
+                    Text("Monthly expenses")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.ftInkTertiary)
+                    DerivedText(text: Money.currency(projection.assumptions.maxMonthlyExpenses),
+                                width: 108)
                 }
                 GridRow {
                     Text("Projection horizon (months)").font(.system(size: 12.5))
@@ -81,10 +82,17 @@ struct ProjectionsView: View {
                            Money.percent(projection.assumptions.savingsRateOfIncome))
             }
 
-            Text("Per-account contributions and expected returns live on the Accounts screen.")
-                .font(.system(size: 11.5))
-                .foregroundStyle(Color.ftInkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Monthly expenses is the total of your **Expenses** screen. Per-account contributions and expected returns live on **Accounts**.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if projection.assumptions.maxMonthlyExpenses == 0 {
+                    Text("No expenses logged yet, so a month currently costs nothing.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.orange)
+                }
+            }
         }
     }
 

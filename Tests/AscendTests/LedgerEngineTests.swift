@@ -58,7 +58,7 @@ private let tol = 0.005
             RecordInput(id: UUID(), date: WorkbookFixture.date(1, 1, 2026), balances: [a.id: 0]),
             RecordInput(id: UUID(), date: WorkbookFixture.date(2, 1, 2026), balances: [a.id: 100]),
         ],
-        targetNetWorth: 1000, monthlyNetIncome: 0, maxMonthlyExpenses: 0, projectionHorizonMonths: 12)
+        targetNetWorth: 1000, monthlyNetIncome: 0, projectionHorizonMonths: 12)
     let d = LedgerEngine.derive(input)
     #expect(d[1].changeAmount == 100)
     #expect(d[1].changePercent == nil)

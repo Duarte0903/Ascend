@@ -9,7 +9,8 @@ struct AscendApp: App {
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
 
     init() {
-        let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self, BalanceEntry.self, AppSettings.self])
+        let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self, BalanceEntry.self,
+                         AppSettings.self, Expense.self, ExpenseCategory.self])
         do {
             container = try ModelContainer(for: schema)
         } catch {
@@ -19,6 +20,7 @@ struct AscendApp: App {
         SeedData.seedIfNeeded(context)
         SeedData.migrateLegacyColors(context)
         SeedData.migrateCategories(context)
+        SeedData.migrateExpenses(context)
     }
 
     var body: some Scene {
@@ -63,7 +65,9 @@ struct AscendApp: App {
               let data = try? BackupService.export(
                   accounts: accounts, records: records,
                   settings: SeedData.settings(in: context),
-                  categories: (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? [])
+                  categories: (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? [],
+                  expenses: (try? context.fetch(FetchDescriptor<Expense>())) ?? [],
+                  expenseCategories: (try? context.fetch(FetchDescriptor<ExpenseCategory>())) ?? [])
         else { return }
 
         let panel = NSSavePanel()

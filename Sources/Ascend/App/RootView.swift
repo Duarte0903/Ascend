@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     @State private var selection: AppSection = .dashboard
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
@@ -17,7 +18,8 @@ struct RootView: View {
     private var netWorth: Double? {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context))).last?.total
+            settings: SeedData.settings(in: context),
+            expenses: expenseItems)).last?.total
     }
 
     var body: some View {
@@ -76,6 +78,7 @@ struct RootView: View {
             case .balances: BalancesView()
             case .trends: TrendsView()
             case .allocation: AllocationView()
+            case .expenses: ExpensesView()
             case .goals: GoalsView()
             case .projections: ProjectionsView()
             case .accounts: AccountsView()

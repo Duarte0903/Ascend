@@ -5,12 +5,13 @@ struct GoalsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     private var settings: AppSettings { SeedData.settings(in: context) }
 
     private var dashboard: DashboardMetrics {
         DashboardMetrics.compute(records: LedgerEngine.derive(
-            PortfolioStore.input(accounts: accounts, records: records, settings: settings)))
+            PortfolioStore.input(accounts: accounts, records: records, settings: settings, expenses: expenseItems)))
     }
 
     private var goal: GoalMetrics {
@@ -130,7 +131,7 @@ struct GoalsView: View {
 
     private var changeCountCaption: String? {
         let derived = LedgerEngine.derive(
-            PortfolioStore.input(accounts: accounts, records: records, settings: settings))
+            PortfolioStore.input(accounts: accounts, records: records, settings: settings, expenses: expenseItems))
         let count = derived.filter { $0.changeAmount != nil }.count
         return count == 0 ? nil : "Across \(count) change\(count == 1 ? "" : "s")"
     }

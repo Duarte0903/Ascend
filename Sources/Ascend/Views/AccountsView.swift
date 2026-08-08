@@ -5,6 +5,7 @@ struct AccountsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
     @Query(sort: \AccountCategory.sortOrder) private var categories: [AccountCategory]
 
     @State private var showingNewAccount = false
@@ -23,7 +24,8 @@ struct AccountsView: View {
     private var latest: DerivedRecord? {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context))).last
+            settings: SeedData.settings(in: context),
+            expenses: expenseItems)).last
     }
 
     var body: some View {

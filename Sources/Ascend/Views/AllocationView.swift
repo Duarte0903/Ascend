@@ -6,16 +6,19 @@ struct AllocationView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     private var latestDate: Date? {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context))).last?.date
+            settings: SeedData.settings(in: context),
+            expenses: expenseItems)).last?.date
     }
 
     private var allocation: AllocationMetrics {
         let input = PortfolioStore.input(accounts: accounts, records: records,
-                                         settings: SeedData.settings(in: context))
+                                         settings: SeedData.settings(in: context),
+            expenses: expenseItems)
         return AllocationMetrics.compute(accounts: input.accounts,
                                          records: LedgerEngine.derive(input))
     }

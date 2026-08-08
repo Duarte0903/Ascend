@@ -54,12 +54,23 @@ enum WorkbookFixture {
                     balances: [cttID: 6962.35, revolutID: 350.27, xtbID: 819.49, edenredID: 277.63]),
     ]
 
+    static let rentID = UUID()
+    static let insuranceID = UUID()
+
+    /// Monthly expenses are now derived from commitments rather than typed.
+    /// These add up to the workbook's original 200 €: 180 monthly plus a 240 €
+    /// yearly premium, which normalises to 20 €/month.
+    static let expenses: [ExpenseInput] = [
+        ExpenseInput(id: rentID, name: "Rent", amount: 180, frequency: .monthly),
+        ExpenseInput(id: insuranceID, name: "Insurance", amount: 240, frequency: .yearly),
+    ]
+
     static let portfolio = PortfolioInput(
         accounts: accounts,
         records: records,
+        expenses: expenses,
         targetNetWorth: 25_000,
         monthlyNetIncome: 1_117,
-        maxMonthlyExpenses: 200,
         projectionHorizonMonths: 60
     )
 }

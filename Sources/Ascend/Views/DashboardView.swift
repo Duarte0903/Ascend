@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
+    @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     @AppStorage("dateRange") private var rangeRaw = DateRangeFilter.all.rawValue
 
@@ -22,7 +23,8 @@ struct DashboardView: View {
     private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context)))
+            settings: SeedData.settings(in: context),
+            expenses: expenseItems))
     }
 
     private var metrics: DashboardMetrics { DashboardMetrics.compute(records: derived) }
