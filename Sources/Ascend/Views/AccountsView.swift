@@ -349,7 +349,7 @@ struct AccountsView: View {
                         MoneyField(value: Binding(
                             get: { account.monthlyContribution },
                             set: { account.monthlyContribution = max(0, $0); try? context.save() }),
-                            decimals: 0, width: 96, suffix: "€")
+                            decimals: 2, width: 96, suffix: "€")
                             .gridColumnAlignment(.trailing)
                     }
                     GridRow {

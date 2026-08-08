@@ -87,6 +87,10 @@ struct MoneyField: View {
 /// comma-to-dot substitution cannot do this: it turns `6.285,73` into
 /// `6.285.73`, which fails to parse and makes the field discard the edit.
 enum NumberText {
+    /// `decimals` is a **maximum**, not a fixed width. Padding to a fixed width
+    /// is what destroyed cents: a field rendering 224,4 as "224" reparses as
+    /// 224 on the next commit, so the display silently truncated the value.
+    /// Trailing zeros are dropped, so 224 shows as "224" and 224,4 as "224,4".
     static func string(from value: Double, decimals: Int,
                        locale: Locale = .current) -> String {
         let formatter = NumberFormatter()
@@ -94,8 +98,8 @@ enum NumberText {
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = false
         formatter.decimalSeparator = locale.decimalSeparator ?? ","
-        formatter.minimumFractionDigits = decimals
-        formatter.maximumFractionDigits = decimals
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = max(decimals, 2)
         return formatter.string(from: NSNumber(value: value)) ?? "0"
     }
 
@@ -346,9 +350,9 @@ struct HeroField: View {
                 .onHover { hovering = $0 }
                 .animation(.easeOut(duration: 0.14), value: focused)
                 .animation(.easeOut(duration: 0.14), value: hovering)
-                .onAppear { text = NumberText.string(from: value, decimals: 0) }
+                .onAppear { text = NumberText.string(from: value, decimals: 2) }
                 .onChange(of: value) { _, new in
-                    if !focused { text = NumberText.string(from: new, decimals: 0) }
+                    if !focused { text = NumberText.string(from: new, decimals: 2) }
                 }
                 .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
 
@@ -360,6 +364,6 @@ struct HeroField: View {
 
     private func commit() {
         if let parsed = NumberText.double(from: text) { value = parsed }
-        text = NumberText.string(from: value, decimals: 0)
+        text = NumberText.string(from: value, decimals: 2)
     }
 }

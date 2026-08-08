@@ -55,14 +55,14 @@ struct ProjectionsView: View {
                     MoneyField(value: Binding(
                         get: { settings.monthlyNetIncome },
                         set: { settings.monthlyNetIncome = max(0, $0); try? context.save() }),
-                        decimals: 0)
+                        decimals: 2)
                 }
                 GridRow {
                     Text("Max monthly expenses").font(.system(size: 12.5))
                     MoneyField(value: Binding(
                         get: { settings.maxMonthlyExpenses },
                         set: { settings.maxMonthlyExpenses = max(0, $0); try? context.save() }),
-                        decimals: 0)
+                        decimals: 2)
                 }
                 GridRow {
                     Text("Projection horizon (months)").font(.system(size: 12.5))

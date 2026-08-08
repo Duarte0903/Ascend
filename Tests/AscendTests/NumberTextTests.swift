@@ -78,6 +78,40 @@ private func parse(_ text: String, _ locale: Locale = pt) -> Double? {
     #expect(NumberText.string(from: 25000, decimals: 0, locale: pt) == "25000")
 }
 
+// MARK: - Cents must survive being displayed
+
+/// The reported case: 224,40 typed into the monthly contribution field came
+/// back as 224. Parsing was correct; the *display* padded to a fixed zero
+/// decimals, and that truncated text reparsed as 224 on the next commit.
+@Test func displayNeverTruncatesCents() {
+    #expect(NumberText.string(from: 224.4, decimals: 0, locale: pt) == "224,4")
+    #expect(NumberText.string(from: 224.4, decimals: 2, locale: pt) == "224,4")
+    #expect(NumberText.double(from: "224,40", locale: pt) == 224.4)
+}
+
+/// Whole numbers stay clean — no "224,00" padding.
+@Test func displayDropsTrailingZeros() {
+    #expect(NumberText.string(from: 224, decimals: 2, locale: pt) == "224")
+    #expect(NumberText.string(from: 1117, decimals: 2, locale: pt) == "1117")
+    #expect(NumberText.string(from: 0, decimals: 2, locale: pt) == "0")
+}
+
+/// The full commit cycle a field performs: parse the typed text, render it,
+/// then parse that rendering again. Cents must survive both passes at every
+/// decimals setting a field might be configured with.
+@Test func commitCycleIsStableAtEveryDecimalsSetting() {
+    for decimals in [0, 2] {
+        for typed in ["224,40", "224,4", "1117,50", "6285,73", "0,05"] {
+            let first = NumberText.double(from: typed, locale: pt)
+            #expect(first != nil, "'\(typed)' failed to parse")
+            let shown = NumberText.string(from: first ?? 0, decimals: decimals, locale: pt)
+            let second = NumberText.double(from: shown, locale: pt)
+            #expect(second == first,
+                    "decimals \(decimals): '\(typed)' -> \(first ?? .nan) -> '\(shown)' -> \(second ?? .nan)")
+        }
+    }
+}
+
 /// Whatever is displayed must parse back to the same number, or committing a
 /// field twice would drift.
 @Test func displayRoundTripsThroughParsing() {
