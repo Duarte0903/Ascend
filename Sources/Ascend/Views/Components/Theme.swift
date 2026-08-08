@@ -42,6 +42,11 @@ enum Theme {
         static let dot: CGFloat = 9
         /// The colour stripe down the side of an account card.
         static let stripe: CGFloat = 4
+        /// Account icons. Three deliberate scales — every icon at a given scale
+        /// is the same size, whether it is a custom image or a default symbol.
+        static let iconLarge: CGFloat = 40     // account cards
+        static let iconMedium: CGFloat = 20    // archived list
+        static let iconInline: CGFloat = 16    // table headers
         /// The narrow companion column beside a card.
         static let sidePanel: CGFloat = 330
         static let sheetNarrow: CGFloat = 480
@@ -102,6 +107,20 @@ extension Font {
     /// Figures use SF Pro Rounded throughout — the app's numeric voice.
     static func figure(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight, design: .rounded)
+    }
+
+    /// Column headings. Defined once here because column widths are measured
+    /// from this exact font — if the two drift apart, headings clip.
+    static let tableHeader = Font.system(size: Theme.tableHeaderSize, weight: .semibold)
+}
+
+extension Theme {
+    /// Table headings. Big enough to read as a heading rather than fine print.
+    static let tableHeaderSize: CGFloat = 12.5
+    static let tableHeaderTracking: CGFloat = 0.2
+    /// The AppKit equivalent, for measuring text width.
+    static var tableHeaderNSFont: NSFont {
+        NSFont.systemFont(ofSize: tableHeaderSize, weight: .semibold)
     }
 }
 

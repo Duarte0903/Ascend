@@ -11,6 +11,8 @@ struct BackupFile: Codable {
         /// still import — an older backup simply has no note and no category.
         var note: String?
         var categoryID: UUID?
+        /// Base64 PNG of the account's custom icon, if it has one.
+        var iconBase64: String?
     }
     struct CategoryDTO: Codable {
         var id: UUID, name: String, sortOrder: Int
@@ -32,7 +34,7 @@ struct BackupFile: Codable {
         var targetNetWorth: Double, monthlyNetIncome: Double
         var maxMonthlyExpenses: Double, projectionHorizonMonths: Int
     }
-    var version = 3
+    var version = 4
     var accounts: [AccountDTO]
     var records: [RecordDTO]
     var settings: SettingsDTO
@@ -57,7 +59,8 @@ enum BackupService {
                       monthlyContribution: $0.monthlyContribution,
                       isLeftoverDestination: $0.isLeftoverDestination,
                       isArchived: $0.isArchived,
-                      note: $0.note, categoryID: $0.categoryID)
+                      note: $0.note, categoryID: $0.categoryID,
+                      iconBase64: $0.iconData?.base64EncodedString())
             },
             records: records.map { record in
                 var balances: [String: Double] = [:]
@@ -149,6 +152,9 @@ enum BackupService {
                 monthlyContribution: dto.monthlyContribution,
                 isLeftoverDestination: dto.isLeftoverDestination)
             account.isArchived = dto.isArchived
+            if let encoded = dto.iconBase64 {
+                account.iconData = Data(base64Encoded: encoded)
+            }
             context.insert(account)
         }
         for dto in file.records {

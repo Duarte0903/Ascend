@@ -120,9 +120,9 @@ struct ExpensesView: View {
                     Text("Active").frame(width: Theme.Size.control, alignment: .center)
                     Color.clear.frame(width: Theme.Size.iconButton)
                 }
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.5)
-                .foregroundStyle(Color.ftInkTertiary)
+                .font(.tableHeader)
+                .tracking(Theme.tableHeaderTracking)
+                .foregroundStyle(Color.ftInkSecondary)
                 .padding(.bottom, 8)
 
                 Divider().gridCellUnsizedAxes(.horizontal)
@@ -264,9 +264,9 @@ struct ExpensesView: View {
                         Text("Per month").gridColumnAlignment(.trailing)
                         Text("Share").gridColumnAlignment(.trailing)
                     }
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(Color.ftInkTertiary)
+                    .font(.tableHeader)
+                    .tracking(Theme.tableHeaderTracking)
+                    .foregroundStyle(Color.ftInkSecondary)
 
                     Divider().gridCellUnsizedAxes(.horizontal)
 

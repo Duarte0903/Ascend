@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AppKit
 
 struct AccountsView: View {
     @Environment(\.modelContext) private var context
@@ -17,6 +18,7 @@ struct AccountsView: View {
     @State private var pendingDeletion: Account?
 
     @State private var showingTypes = false
+    @State private var iconPickerFor: UUID?
 
     private var active: [Account] { accounts.filter { !$0.isArchived } }
     private var archived: [Account] { accounts.filter(\.isArchived) }
@@ -156,9 +158,9 @@ struct AccountsView: View {
             Text("Used by").frame(width: Theme.Size.control, alignment: .trailing)
             Spacer(minLength: 0)
         }
-        .font(.system(size: 10.5, weight: .semibold))
-        .tracking(0.5)
-        .foregroundStyle(Color.ftInkTertiary)
+        .font(.tableHeader)
+        .tracking(Theme.tableHeaderTracking)
+        .foregroundStyle(Color.ftInkSecondary)
         .padding(.horizontal, 20)
         .padding(.bottom, 8)
     }
@@ -260,6 +262,116 @@ struct AccountsView: View {
         .shadow(color: .black.opacity(0.055), radius: 12, y: 4)
     }
 
+    /// Click to choose an image, or drop one straight onto it. With no custom
+    /// image the account shows a symbol derived from its flags.
+    private func iconPicker(_ account: Account) -> some View {
+        // A plain button rather than a Menu: a borderless menu pads its label,
+        // which made this icon a different size from the same icon elsewhere.
+        Button { iconPickerFor = account.id } label: {
+            AccountIcon(account, size: Theme.Size.iconLarge)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: Binding(
+            get: { iconPickerFor == account.id },
+            set: { if !$0 && iconPickerFor == account.id { iconPickerFor = nil } }),
+            arrowEdge: .bottom) {
+            iconPickerPopover(account)
+        }
+        .contextMenu {
+            Button("Choose Image…") { chooseIcon(for: account) }
+            if account.iconData != nil {
+                Button("Remove Image") {
+                    AccountService.clearIcon(for: account, in: context)
+                }
+            }
+        }
+        .help(account.iconData == nil
+              ? "Click to pick an image, or drop one here"
+              : "Click to change this account's image")
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            let accepted = AccountService.setIcon(fromFileAt: url, for: account, in: context)
+            if !accepted {
+                errorMessage = "That file isn't an image Ascend can read. Try a PNG or JPEG."
+            }
+            return accepted
+        }
+    }
+
+    private func iconPickerPopover(_ account: Account) -> some View {
+        let library = AccountService.iconLibrary(accounts: accounts)
+        return VStack(alignment: .leading, spacing: 12) {
+            if library.isEmpty {
+                Text("No images loaded yet")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text("Choose one and it will be offered here for your other accounts.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 240, alignment: .leading)
+            } else {
+                Text("Already loaded")
+                    .font(.system(size: 12.5, weight: .semibold))
+                Text("Accounts at the same bank can share one image.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Size.iconLarge + 10),
+                                             spacing: 10)], spacing: 10) {
+                    ForEach(library) { stored in
+                        Button {
+                            AccountService.reuseIcon(stored.data, for: account, in: context)
+                            iconPickerFor = nil
+                        } label: {
+                            AccountIcon(iconData: stored.data,
+                                        colorHex: account.colorHex,
+                                        includeInUsable: account.includeInUsable,
+                                        countsAsSavings: account.countsAsSavings,
+                                        expectedAnnualReturn: account.expectedAnnualReturn,
+                                        size: Theme.Size.iconLarge)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Theme.Size.iconLarge * 0.26,
+                                                     style: .continuous)
+                                        .strokeBorder(Color.ftAccent,
+                                                      lineWidth: account.iconData == stored.data ? 2 : 0))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Used by \(stored.usedBy.joined(separator: ", "))")
+                    }
+                }
+                .frame(width: 260, alignment: .leading)
+            }
+
+            Divider()
+
+            HStack {
+                Button("Choose Image…") {
+                    iconPickerFor = nil
+                    chooseIcon(for: account)
+                }
+                Spacer()
+                if account.iconData != nil {
+                    Button("Remove", role: .destructive) {
+                        AccountService.clearIcon(for: account, in: context)
+                        iconPickerFor = nil
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    private func chooseIcon(for account: Account) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if !AccountService.setIcon(fromFileAt: url, for: account, in: context) {
+            errorMessage = "That file isn't an image Ascend can read. Try a PNG or JPEG."
+        }
+    }
+
     private func category(for account: Account) -> AccountCategory? {
         categories.first { $0.id == account.categoryID }
     }
@@ -267,6 +379,8 @@ struct AccountsView: View {
     /// Who the account is, and what it's worth. Nothing else competes here.
     private func identityRow(_ account: Account) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            iconPicker(account)
+
             VStack(alignment: .leading, spacing: 7) {
                 NameField(name: account.name) { newValue in
                     do { try AccountService.rename(account, to: newValue, in: context) }
@@ -428,8 +542,7 @@ struct AccountsView: View {
             VStack(spacing: 10) {
                 ForEach(archived) { account in
                     HStack(spacing: 10) {
-                        Circle().fill(Color(hex: account.colorHex).opacity(0.5))
-                            .frame(width: Theme.Size.dot, height: Theme.Size.dot)
+                        AccountIcon(account, size: Theme.Size.iconMedium).opacity(0.6)
                         Text(account.name)
                             .font(.system(size: 13))
                             .foregroundStyle(Color.ftInkSecondary)

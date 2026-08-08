@@ -20,6 +20,9 @@ final class Account {
     var isLeftoverDestination: Bool = false
     var isArchived: Bool = false
     var archivedAt: Date?
+    /// An optional custom icon, downscaled to a thumbnail on import.
+    /// `.externalStorage` keeps the image out of the store file itself.
+    @Attribute(.externalStorage) var iconData: Data?
 
     init(id: UUID = UUID(), name: String, note: String = "",
          categoryID: UUID? = nil, legacyKind: String = "main", colorHex: String,

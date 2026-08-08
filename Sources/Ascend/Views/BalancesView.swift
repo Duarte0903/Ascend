@@ -77,18 +77,39 @@ struct BalancesView: View {
         .ftCard(padding: 0)
     }
 
+    /// Account columns are as wide as the longest account name needs, so names
+    /// are simply never truncated. The table already scrolls sideways, so the
+    /// only cost is a little scroll distance — and nothing has to be revealed on
+    /// hover, because nothing is hidden.
+    private var accountColumnWidth: CGFloat {
+        let font = Theme.tableHeaderNSFont
+        let widest = activeAccounts.reduce(CGFloat(0)) { widest, account in
+            let size = (account.name as NSString)
+                .size(withAttributes: [.font: font])
+            // Tracking adds spacing after every character; leaving it out of the
+            // measurement is what made headings clip.
+            let tracked = size.width + CGFloat(account.name.count) * Theme.tableHeaderTracking
+            return max(widest, tracked)
+        }
+        // icon + spacing + text, with a little breathing room, never narrower
+        // than a money field and capped so one silly name cannot dominate.
+        let needed = Theme.Size.iconInline + 6 + widest.rounded(.up) + 10
+        return min(max(Theme.Size.field, needed), 260)
+    }
+
     private var headerRow: some View {
         GridRow {
             Text("Date").frame(width: Theme.Size.field, alignment: .leading)
             ForEach(activeAccounts) { account in
                 HStack(spacing: 6) {
-                    Circle().fill(Color(hex: account.colorHex))
-                        .frame(width: Theme.Size.dot - 2, height: Theme.Size.dot - 2)
-                    Text(account.name)
+                    AccountIcon(account, size: Theme.Size.iconInline)
+                    Text(account.name).lineLimit(1)
                 }
-                .frame(width: Theme.Size.field, alignment: .trailing)
-                // Description surfaces on hover rather than crowding the header.
-                .help(account.note.isEmpty ? account.name : account.note)
+                .frame(width: accountColumnWidth, alignment: .trailing)
+                // Only useful for the rare name long enough to hit the cap.
+                .help(account.note.isEmpty
+                      ? account.name
+                      : "\(account.name) — \(account.note)")
             }
             Text("Total").frame(width: Theme.Size.field, alignment: .trailing)
             Text("Usable").frame(width: Theme.Size.field, alignment: .trailing)
@@ -98,9 +119,9 @@ struct BalancesView: View {
             Color.clear.frame(width: Theme.Size.iconButton)
             Spacer(minLength: 0)
         }
-        .font(.system(size: 10.5, weight: .semibold))
-        .tracking(0.5)
-        .foregroundStyle(Color.ftInkTertiary)
+        .font(.tableHeader)
+        .tracking(Theme.tableHeaderTracking)
+        .foregroundStyle(Color.ftInkSecondary)
         .padding(.bottom, 8)
     }
 
@@ -119,7 +140,8 @@ struct BalancesView: View {
                 ForEach(activeAccounts) { account in
                     MoneyField(value: Binding(
                         get: { record.amount(for: account.id) },
-                        set: { record.setAmount($0, for: account.id); try? context.save() }))
+                        set: { record.setAmount($0, for: account.id); try? context.save() }),
+                        width: accountColumnWidth)
                 }
 
                 DerivedText(text: Money.currency(row.total), width: Theme.Size.field,

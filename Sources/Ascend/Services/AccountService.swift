@@ -185,6 +185,56 @@ enum AccountService {
         return active.indices.contains(index + offset)
     }
 
+    // MARK: - Icons
+
+    /// Stores a downscaled copy of the chosen image. Returns false when the
+    /// file is not an image the system can read, so the caller can say so
+    /// rather than silently doing nothing.
+    @discardableResult
+    static func setIcon(fromFileAt url: URL, for account: Account,
+                        in context: ModelContext) -> Bool {
+        guard let data = AccountIconStyle.thumbnailData(fromFileAt: url) else { return false }
+        account.iconData = data
+        try? context.save()
+        return true
+    }
+
+    /// Clearing an icon falls back to the symbol derived from the account's
+    /// flags — an account is never left without one.
+    static func clearIcon(for account: Account, in context: ModelContext) {
+        account.iconData = nil
+        try? context.save()
+    }
+
+    /// One image already in the store, and which accounts are using it.
+    struct StoredIcon: Identifiable, Hashable {
+        let data: Data
+        let usedBy: [String]
+        var id: Data { data }
+    }
+
+    /// Every distinct image already loaded, so the same bank logo can be picked
+    /// again instead of hunting for the file a second time. Identical images
+    /// collapse into one entry: importing re-encodes to PNG at a fixed size, so
+    /// the same source file always yields the same bytes.
+    static func iconLibrary(accounts: [Account]) -> [StoredIcon] {
+        var order: [Data] = []
+        var users: [Data: [String]] = [:]
+        for account in accounts.sorted(by: { $0.sortOrder < $1.sortOrder }) {
+            guard let data = account.iconData else { continue }
+            if users[data] == nil { order.append(data) }
+            users[data, default: []].append(account.name)
+        }
+        return order.map { StoredIcon(data: $0, usedBy: users[$0] ?? []) }
+    }
+
+    /// Each account keeps its own copy rather than sharing a reference, so
+    /// deleting one account can never blank another's icon.
+    static func reuseIcon(_ data: Data, for account: Account, in context: ModelContext) {
+        account.iconData = data
+        try? context.save()
+    }
+
     static func affectedRecordCount(for account: Account, records: [BalanceRecord]) -> Int {
         records.filter { record in
             record.entries.contains { $0.accountID == account.id }

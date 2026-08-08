@@ -91,9 +91,9 @@ struct AllocationView: View {
                     Text("Amount").gridColumnAlignment(.trailing)
                     Text("Share").gridColumnAlignment(.trailing)
                 }
-                .font(.system(size: 10.5, weight: .semibold))
-                .tracking(0.5)
-                .foregroundStyle(Color.ftInkTertiary)
+                .font(.tableHeader)
+                .tracking(Theme.tableHeaderTracking)
+                .foregroundStyle(Color.ftInkSecondary)
 
                 Divider().gridCellUnsizedAxes(.horizontal)
 

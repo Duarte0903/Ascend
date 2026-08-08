@@ -273,9 +273,9 @@ struct ProjectionsView: View {
                         Text("Usable").frame(width: Theme.Size.field, alignment: .trailing)
                         Spacer(minLength: 0)
                     }
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(Color.ftInkTertiary)
+                    .font(.tableHeader)
+                    .tracking(Theme.tableHeaderTracking)
+                    .foregroundStyle(Color.ftInkSecondary)
 
                     Divider().gridCellUnsizedAxes(.horizontal)
 
