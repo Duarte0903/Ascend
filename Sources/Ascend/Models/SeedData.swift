@@ -258,6 +258,22 @@ enum SeedData {
         if changed { try? context.save() }
     }
 
+    /// Clears a contribution left on the leftover destination by a version
+    /// that let one be typed there. Income lands in that account already, so a
+    /// contribution on top was subtracted from the income it was then handed —
+    /// which showed up as a leftover that could go negative for no visible
+    /// reason.
+    static func migrateLeftoverContribution(_ context: ModelContext) {
+        guard let accounts = try? context.fetch(FetchDescriptor<Account>()) else { return }
+        var changed = false
+        for account in accounts
+        where account.isLeftoverDestination && account.monthlyContribution != 0 {
+            account.monthlyContribution = 0
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
+
     static func settings(in context: ModelContext) -> AppSettings {
         if let existing = try? context.fetch(FetchDescriptor<AppSettings>()).first {
             return existing

@@ -26,6 +26,15 @@ struct AccountsView: View {
         storedSettings.first ?? SeedData.settings(in: context)
     }
 
+    /// What the leftover account actually receives each month, which is the
+    /// contribution it would otherwise be asked for.
+    private var leftoverPerMonth: Double {
+        let input = PortfolioStore.input(accounts: accounts, records: records,
+                                         settings: settings, expenses: expenseItems)
+        return ProjectionEngine.project(input, records: LedgerEngine.derive(input),
+                                        from: Date()).assumptions.leftoverPerMonth
+    }
+
     @State private var showingNewAccount = false
     @State private var newName = ""
     @State private var newNote = ""
@@ -541,12 +550,26 @@ struct AccountsView: View {
                     GridRow {
                         Text("Monthly contribution")
                             .font(.system(size: 12.5))
-                            .foregroundStyle(Color.ftInkSecondary)
-                        MoneyField(value: Binding(
-                            get: { account.monthlyContribution },
-                            set: { account.monthlyContribution = max(0, $0); try? context.save() }),
-                            decimals: 2, width: Theme.Size.field, suffix: "€")
-                            .gridColumnAlignment(.trailing)
+                            .foregroundStyle(account.isLeftoverDestination
+                                             ? Color.ftInkTertiary : Color.ftInkSecondary)
+                        if account.isLeftoverDestination {
+                            // Worked out, not typed: this account gets whatever
+                            // is left of the income once every other account and
+                            // every expense has taken its share.
+                            DerivedText(text: Money.currency(leftoverPerMonth),
+                                        width: Theme.Size.field)
+                                .gridColumnAlignment(.trailing)
+                                .help("Everything left of your income after contributions and expenses. It lands here because this is the monthly leftover account, so there is nothing to type.")
+                        } else {
+                            MoneyField(value: Binding(
+                                get: { account.monthlyContribution },
+                                set: {
+                                    account.monthlyContribution = max(0, $0)
+                                    try? context.save()
+                                }),
+                                decimals: 2, width: Theme.Size.field, suffix: "€")
+                                .gridColumnAlignment(.trailing)
+                        }
                     }
                     GridRow {
                         Text("Expected annual return")

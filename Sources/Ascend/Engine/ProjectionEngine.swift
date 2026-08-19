@@ -6,7 +6,9 @@ struct ProjectionAssumptions: Sendable {
     /// screens can show it as worked out instead of offering a dead edit.
     var derivesNetIncome: Bool = false
     var maxMonthlyExpenses: Double
-    /// Sum of every account's monthly contribution — derived, never typed.
+    /// What goes into savings and investments each month — derived, never
+    /// typed. Contributions into everyday accounts are not in it: moving salary
+    /// between your own pockets is not investing.
     var totalInvestedPerMonth: Double
     /// income - expenses - contributions — derived, never typed.
     var leftoverPerMonth: Double
@@ -14,6 +16,13 @@ struct ProjectionAssumptions: Sendable {
     var savingsRateOfIncome: Double
     var horizonMonths: Int
     var hasLeftoverDestination: Bool
+    /// The leftover destination's own monthly contribution, and its name.
+    ///
+    /// Income already lands in that account, so a contribution on top is read
+    /// as salary transferred out of the salary — it is subtracted from itself.
+    /// Almost always a mistake, and invisible without saying so.
+    var leftoverDestinationContribution: Double = 0
+    var leftoverDestinationName: String?
     /// What each account pays out per month, after resolving every expense to
     /// the account responsible for it.
     var monthlyExpensesByAccount: [UUID: Double]
@@ -50,14 +59,27 @@ enum ProjectionEngine {
                         from startDate: Date) -> Projection {
         let accounts = input.activeAccountsSorted
 
-        // Only accounts that hold spendable or saved money count as investing
-        // your income. A contribution to an account that is neither — a
-        // food-only card, say — is funded from outside your salary, so it must
-        // not be deducted from it, or the leftover would be understated.
+        // Two different sums, and conflating them was a bug.
+        //
+        // This one balances the money: every contribution paid out of your
+        // salary has to leave the salary, or the leftover is overstated. An
+        // account that holds neither spendable nor saved money — a food-only
+        // card — is funded from outside the salary, so it is left out.
         let fundedFromIncome = accounts.filter { $0.includeInUsable || $0.countsAsSavings }
-        let totalInvested = fundedFromIncome.reduce(0) { $0 + $1.monthlyContribution }
-        let leftover = input.monthlyNetIncome - input.maxMonthlyExpenses - totalInvested
-        let leftoverID = accounts.first(where: \.isLeftoverDestination)?.id
+        let contributionsFromIncome = fundedFromIncome
+            .reduce(0) { $0 + $1.monthlyContribution }
+
+        // And this one is what "invested" means to a reader: what goes into
+        // savings and investments. Moving salary into an everyday current
+        // account is not investing it, however large the transfer.
+        let invested = accounts
+            .filter { $0.countsAsSavings || $0.investmentTracking == .included }
+            .reduce(0) { $0 + $1.monthlyContribution }
+
+        let leftover = input.monthlyNetIncome - input.maxMonthlyExpenses
+            - contributionsFromIncome
+        let destination = accounts.first(where: \.isLeftoverDestination)
+        let leftoverID = destination?.id
 
         // Each expense is debited from the account that pays it. Anything
         // pointing at a missing or archived account falls back to the leftover
@@ -78,13 +100,15 @@ enum ProjectionEngine {
             monthlyNetIncome: input.monthlyNetIncome,
             derivesNetIncome: input.derivesNetIncome,
             maxMonthlyExpenses: input.maxMonthlyExpenses,
-            totalInvestedPerMonth: totalInvested,
+            totalInvestedPerMonth: invested,
             leftoverPerMonth: leftover,
             savingsRateOfIncome: input.monthlyNetIncome == 0
                 ? 0
                 : (input.monthlyNetIncome - input.maxMonthlyExpenses) / input.monthlyNetIncome,
             horizonMonths: input.projectionHorizonMonths,
             hasLeftoverDestination: leftoverID != nil,
+            leftoverDestinationContribution: destination?.monthlyContribution ?? 0,
+            leftoverDestinationName: destination?.name,
             monthlyExpensesByAccount: expensesByAccount,
             unassignedMonthlyExpenses: unassigned)
 
@@ -112,7 +136,7 @@ enum ProjectionEngine {
         // as contributions. Expenses are deliberately *not* deducted here —
         // each account pays its own below, and taking them off twice would
         // understate every month.
-        let surplusToDestination = input.monthlyNetIncome - totalInvested
+        let surplusToDestination = input.monthlyNetIncome - contributionsFromIncome
 
         if input.projectionHorizonMonths >= 1 {
             for month in 1...input.projectionHorizonMonths {

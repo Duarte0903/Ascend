@@ -162,6 +162,10 @@ enum AccountService {
     static func setLeftoverDestination(_ account: Account?, accounts: [Account]) {
         for candidate in accounts {
             candidate.isLeftoverDestination = (candidate.id == account?.id)
+            // The destination receives income less contributions and expenses,
+            // so a contribution of its own would be subtracted from the very
+            // income it is then handed. Clearing it is the only coherent state.
+            if candidate.isLeftoverDestination { candidate.monthlyContribution = 0 }
         }
     }
 

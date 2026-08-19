@@ -1447,3 +1447,224 @@ struct GrossIncludesAllowanceTests {
                 < TaxEngine.assess(low.taxInput!).socialSecurity)
     }
 }
+
+@Suite("What counts as invested")
+struct InvestedPerMonthTests {
+
+    private func account(_ name: String, contribution: Double,
+                         usable: Bool, savings: Bool,
+                         tracking: InvestmentTracking = .auto,
+                         destination: Bool = false) -> AccountInfo {
+        AccountInfo(id: UUID(), name: name, colorHex: "#1F6E8C", sortOrder: 0,
+                    includeInUsable: usable, countsAsSavings: savings,
+                    expectedAnnualReturn: 0, monthlyContribution: contribution,
+                    isLeftoverDestination: destination,
+                    investmentTracking: tracking)
+    }
+
+    private func project(_ accounts: [AccountInfo], income: Double = 1_239)
+        -> ProjectionAssumptions {
+        let input = PortfolioInput(accounts: accounts, records: [],
+                                   targetNetWorth: 0, monthlyNetIncome: income,
+                                   projectionHorizonMonths: 1)
+        return ProjectionEngine.project(input, records: [], from: Date()).assumptions
+    }
+
+    @Test("A transfer into an everyday current account is not investing")
+    func currentAccountIsNotInvested() {
+        let assumptions = project([
+            account("Current", contribution: 1_239, usable: true, savings: false,
+                    tracking: .excluded, destination: true),
+            account("Brokerage", contribution: 100, usable: true, savings: true),
+            account("Savings", contribution: 100, usable: true, savings: true),
+        ])
+        #expect(assumptions.totalInvestedPerMonth == 200)
+    }
+
+    @Test("Savings and investment accounts are both counted")
+    func savingsAndInvestmentsCount() {
+        let assumptions = project([
+            account("Savings", contribution: 150, usable: true, savings: true),
+            account("Brokerage", contribution: 50, usable: false, savings: false,
+                    tracking: .included),
+        ])
+        #expect(assumptions.totalInvestedPerMonth == 200)
+    }
+
+    @Test("An account kept out of Investments and out of savings is not counted")
+    func excludedAccountIsNotCounted() {
+        let assumptions = project([
+            account("Meal card", contribution: 224.40, usable: false, savings: false,
+                    tracking: .excluded),
+        ])
+        #expect(assumptions.totalInvestedPerMonth == 0)
+    }
+
+    @Test("The leftover still balances against every contribution paid from salary")
+    func leftoverStillBalances() {
+        // The current account's transfer is not "invested", but it does leave
+        // the salary — so it still comes off the leftover.
+        let assumptions = project([
+            account("Current", contribution: 300, usable: true, savings: false,
+                    tracking: .excluded, destination: true),
+            account("Brokerage", contribution: 100, usable: true, savings: true),
+        ], income: 1_000)
+        #expect(assumptions.totalInvestedPerMonth == 100)
+        #expect(assumptions.leftoverPerMonth == 1_000 - 400)
+    }
+
+    @Test("Money is neither created nor destroyed by the split")
+    func moneyIsConserved() {
+        let accounts = [
+            account("Current", contribution: 300, usable: true, savings: false,
+                    tracking: .excluded, destination: true),
+            account("Brokerage", contribution: 100, usable: true, savings: true),
+        ]
+        let input = PortfolioInput(accounts: accounts, records: [
+            RecordInput(id: UUID(), date: Date(), createdAt: Date(),
+                        balances: Dictionary(uniqueKeysWithValues:
+                            accounts.map { ($0.id, 0.0) }))
+        ], targetNetWorth: 0, monthlyNetIncome: 1_000, projectionHorizonMonths: 1)
+
+        let projection = ProjectionEngine.project(
+            input, records: LedgerEngine.derive(input), from: Date())
+        // One month of income, no expenses: net worth rises by exactly income.
+        let grown = projection.months.last!.netWorth - projection.months.first!.netWorth
+        #expect(abs(grown - 1_000) < 0.000_1)
+    }
+}
+
+@Suite("Income subtracted from itself")
+struct LeftoverDestinationContributionTests {
+
+    private func account(_ name: String, contribution: Double,
+                         destination: Bool) -> AccountInfo {
+        AccountInfo(id: UUID(), name: name, colorHex: "#1F6E8C", sortOrder: 0,
+                    includeInUsable: true, countsAsSavings: false,
+                    expectedAnnualReturn: 0, monthlyContribution: contribution,
+                    isLeftoverDestination: destination,
+                    investmentTracking: .excluded)
+    }
+
+    private func assumptions(_ accounts: [AccountInfo]) -> ProjectionAssumptions {
+        ProjectionEngine.project(
+            PortfolioInput(accounts: accounts, records: [], targetNetWorth: 0,
+                           monthlyNetIncome: 1_239, projectionHorizonMonths: 1),
+            records: [], from: Date()).assumptions
+    }
+
+    @Test("A contribution on the leftover destination is reported")
+    func destinationContributionIsSurfaced() {
+        let result = assumptions([account("Banco CTT", contribution: 1_239,
+                                          destination: true)])
+        #expect(result.leftoverDestinationContribution == 1_239)
+        #expect(result.leftoverDestinationName == "Banco CTT")
+    }
+
+    @Test("It takes the whole contribution off the leftover, twice over")
+    func itEatsTheLeftover() {
+        let withIt = assumptions([account("Banco CTT", contribution: 1_239,
+                                          destination: true)])
+        let without = assumptions([account("Banco CTT", contribution: 0,
+                                           destination: true)])
+        // Income transferred out of the income it came from: with no expenses
+        // it lands on exactly zero, and any expense at all pushes it negative.
+        #expect(without.leftoverPerMonth == 1_239)
+        #expect(withIt.leftoverPerMonth == 0)
+        #expect(abs(without.leftoverPerMonth - withIt.leftoverPerMonth - 1_239) < 0.000_1)
+    }
+
+    @Test("With expenses on top it goes negative")
+    func withExpensesItGoesNegative() {
+        let accounts = [account("Banco CTT", contribution: 1_239, destination: true)]
+        let input = PortfolioInput(
+            accounts: accounts,
+            records: [],
+            expenses: [ExpenseInput(id: UUID(), name: "Rent", amount: 227.44,
+                                    frequency: .monthly, accountID: nil)],
+            targetNetWorth: 0, monthlyNetIncome: 1_239, projectionHorizonMonths: 1)
+        let result = ProjectionEngine.project(input, records: [], from: Date()).assumptions
+        #expect(abs(result.leftoverPerMonth + 227.44) < 0.000_1)
+    }
+
+    @Test("A destination with no contribution reports nothing to warn about")
+    func nothingToWarnAbout() {
+        let result = assumptions([account("Banco CTT", contribution: 0,
+                                          destination: true)])
+        #expect(result.leftoverDestinationContribution == 0)
+    }
+
+    @Test("A contribution elsewhere is not mistaken for this")
+    func onlyTheDestinationCounts() {
+        let result = assumptions([
+            account("Banco CTT", contribution: 0, destination: true),
+            account("Brokerage", contribution: 100, destination: false),
+        ])
+        #expect(result.leftoverDestinationContribution == 0)
+        #expect(result.leftoverPerMonth == 1_239 - 100)
+    }
+}
+
+@MainActor
+@Suite("The leftover account's contribution is derived")
+struct LeftoverContributionDerivedTests {
+
+    @Test("Making an account the leftover destination clears its contribution")
+    func settingDestinationClearsIt() throws {
+        let context = try inMemoryContext()
+        let main = Account(name: "Current", colorHex: "#1F6E8C", sortOrder: 0,
+                           includeInUsable: true, countsAsSavings: false,
+                           monthlyContribution: 1_239)
+        context.insert(main)
+        try context.save()
+
+        AccountService.setLeftoverDestination(main, accounts: [main])
+        #expect(main.isLeftoverDestination)
+        #expect(main.monthlyContribution == 0)
+    }
+
+    @Test("Moving the destination elsewhere leaves the old one alone")
+    func movingItDoesNotClearOthers() throws {
+        let context = try inMemoryContext()
+        let main = Account(name: "Current", colorHex: "#1F6E8C", sortOrder: 0,
+                           includeInUsable: true, countsAsSavings: false)
+        let savings = Account(name: "Savings", colorHex: "#7A5EA6", sortOrder: 1,
+                              includeInUsable: true, countsAsSavings: true,
+                              monthlyContribution: 100)
+        context.insert(main); context.insert(savings)
+        try context.save()
+
+        AccountService.setLeftoverDestination(main, accounts: [main, savings])
+        // The account that is not the destination keeps what it contributes.
+        #expect(savings.monthlyContribution == 100)
+    }
+
+    @Test("A contribution left on the destination by an older version is cleared")
+    func migrationClearsIt() throws {
+        let context = try inMemoryContext()
+        let main = Account(name: "Current", colorHex: "#1F6E8C", sortOrder: 0,
+                           includeInUsable: true, countsAsSavings: false,
+                           monthlyContribution: 1_239, isLeftoverDestination: true)
+        context.insert(main)
+        try context.save()
+
+        SeedData.migrateLeftoverContribution(context)
+        #expect(main.monthlyContribution == 0)
+    }
+
+    @Test("Clearing it puts the leftover back where it belongs")
+    func leftoverRecovers() {
+        let destination = AccountInfo(id: UUID(), name: "Current", colorHex: "#1F6E8C",
+                                      sortOrder: 0, includeInUsable: true,
+                                      countsAsSavings: false, expectedAnnualReturn: 0,
+                                      monthlyContribution: 0,
+                                      isLeftoverDestination: true,
+                                      investmentTracking: .excluded)
+        let input = PortfolioInput(accounts: [destination], records: [],
+                                   targetNetWorth: 0, monthlyNetIncome: 1_239,
+                                   projectionHorizonMonths: 1)
+        let result = ProjectionEngine.project(input, records: [], from: Date()).assumptions
+        #expect(result.leftoverPerMonth == 1_239)
+        #expect(result.leftoverDestinationContribution == 0)
+    }
+}

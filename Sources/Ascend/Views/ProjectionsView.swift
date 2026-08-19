@@ -32,6 +32,16 @@ struct ProjectionsView: View {
                         tint: .orange)
             }
 
+            if let doubled = doubleCountedIncome {
+                Callout(text: doubled,
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: .orange)
+            } else if projection.assumptions.leftoverPerMonth < 0 {
+                Callout(text: "Your expenses and contributions come to \(Money.currency(projection.assumptions.maxMonthlyExpenses + shortfallContributions)) a month against \(Money.currency(projection.assumptions.monthlyNetIncome)) of income, so every month runs a deficit. The forecast below assumes it continues.",
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: .orange)
+            }
+
             HStack(alignment: .top, spacing: Theme.gap) {
                 assumptionsCard
                 outlookCard
@@ -49,6 +59,22 @@ struct ProjectionsView: View {
                 monthTable.fillsHeight(minimum: 240)
             }
         }
+    }
+
+    /// Income landing in an account that also transfers money out of the
+    /// salary is the one mistake that reliably produces a negative leftover.
+    private var doubleCountedIncome: String? {
+        let contribution = projection.assumptions.leftoverDestinationContribution
+        guard contribution > 0, let name = projection.assumptions.leftoverDestinationName
+        else { return nil }
+        return "\(name) already receives your income as the leftover destination, and it also has a \(Money.currency(contribution)) monthly contribution. That contribution is read as money moved out of your salary, so your income is subtracted from itself. Clear it on the Accounts screen unless you meant it."
+    }
+
+    /// What the leftover was reduced by, for the deficit message.
+    private var shortfallContributions: Double {
+        projection.assumptions.monthlyNetIncome
+            - projection.assumptions.maxMonthlyExpenses
+            - projection.assumptions.leftoverPerMonth
     }
 
     // MARK: - Assumptions
