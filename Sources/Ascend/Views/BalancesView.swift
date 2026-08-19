@@ -6,6 +6,14 @@ struct BalancesView: View {
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
+    /// Settings are edited on other screens now, so this view has to watch
+    /// them: without a query on the object, a change elsewhere leaves these
+    /// figures stale until the screen is left and re-entered.
+    @Query private var storedSettings: [AppSettings]
+
+    private var settings: AppSettings {
+        storedSettings.first ?? SeedData.settings(in: context)
+    }
 
     @State private var hoveredRow: UUID?
 
@@ -26,27 +34,24 @@ struct BalancesView: View {
     private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context),
+            settings: settings,
             expenses: expenseItems))
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                Callout(text: "Boxed cells are yours to fill. Everything shaded to the right is calculated and updates as you type.")
+        FillingScreen {
+            Callout(text: "Boxed cells are yours to fill. Everything shaded to the right is calculated and updates as you type.")
 
-                if records.isEmpty {
-                    ContentUnavailableView("No records yet",
-                                           systemImage: "tablecells",
-                                           description: Text("Add your first record to start tracking."))
-                        .frame(height: 300)
-                } else if derived.isEmpty {
-                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
-                } else {
-                    table
-                }
+            if records.isEmpty {
+                ContentUnavailableView("No records yet",
+                                       systemImage: "tablecells",
+                                       description: Text("Add your first record to start tracking."))
+                    .frame(height: 300)
+            } else if derived.isEmpty {
+                NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
+            } else {
+                table
             }
-            .padding(Theme.screenPadding)
         }
         .toolbar {
             ToolbarItemGroup {
@@ -77,6 +82,10 @@ struct BalancesView: View {
             }
             .padding(Theme.cardPadding)
         }
+        // A ScrollView is greedy on both axes, so a horizontal one still takes
+        // every pixel of height it is offered and centres its rows in the void.
+        // This one scrolls sideways only; its height is whatever the rows need.
+        .fixedSize(horizontal: false, vertical: true)
         .ftCard(padding: 0)
         // The pointer leaving the table is the only thing that clears the
         // highlight; moving between cells never does.

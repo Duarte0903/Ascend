@@ -62,7 +62,10 @@ struct PortfolioInput: Sendable {
     var records: [RecordInput]
     var expenses: [ExpenseInput]
     var targetNetWorth: Double
-    var monthlyNetIncome: Double
+    /// What Projections was told to assume, used whenever tax is switched off.
+    var typedMonthlyNetIncome: Double
+    /// Present once the Tax screen is on, and then it wins.
+    var tax: TaxInput?
     var projectionHorizonMonths: Int
     /// The combined return the tracked investments are aiming to beat.
     var investmentReturnTarget: Double
@@ -71,12 +74,14 @@ struct PortfolioInput: Sendable {
          expenses: [ExpenseInput] = [],
          targetNetWorth: Double, monthlyNetIncome: Double,
          projectionHorizonMonths: Int,
-         investmentReturnTarget: Double = 0.03) {
+         investmentReturnTarget: Double = 0.03,
+         tax: TaxInput? = nil) {
         self.accounts = accounts
         self.records = records
         self.expenses = expenses
         self.targetNetWorth = targetNetWorth
-        self.monthlyNetIncome = monthlyNetIncome
+        self.typedMonthlyNetIncome = monthlyNetIncome
+        self.tax = tax
         self.projectionHorizonMonths = projectionHorizonMonths
         self.investmentReturnTarget = investmentReturnTarget
     }
@@ -86,6 +91,22 @@ struct PortfolioInput: Sendable {
     var maxMonthlyExpenses: Double {
         expenses.reduce(0) { $0 + $1.monthlyAmount }
     }
+
+    /// Worked out from the salary once the Tax screen is on, exactly as
+    /// expenses are worked out from the Expenses screen, and typed only while
+    /// it is off. Spread over twelve months rather than the fourteen payments,
+    /// because a month's budget is a month's budget.
+    var monthlyNetIncome: Double {
+        guard let tax else { return typedMonthlyNetIncome }
+        // The budget figure, not the total: it is already spendable-only — a
+        // meal card cannot pay rent — and already on whichever basis was asked
+        // for, withholding or assessment.
+        return TaxEngine.assess(tax).budgetMonthlyIncome
+    }
+
+    /// Whether the figure above is calculated rather than typed, so screens can
+    /// show it as derived instead of offering an edit that would be ignored.
+    var derivesNetIncome: Bool { tax != nil }
 
     var activeAccountsSorted: [AccountInfo] {
         accounts.sorted { $0.sortOrder < $1.sortOrder }

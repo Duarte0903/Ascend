@@ -230,6 +230,10 @@ final class ProfileStore {
         SeedData.migrateCategories(context)
         SeedData.migrateExpenses(context)
         SeedData.migrateExpenseAccounts(context)
+        SeedData.migrateYoungTaxpayerStart(context)
+        SeedData.migrateMealAllowanceLimits(context)
+        SeedData.migrateTaxBands(context)
+        SeedData.migrateYoungTaxpayerSkips(context)
     }
 
     /// SwiftData keeps a write-ahead log and a shared-memory file beside the

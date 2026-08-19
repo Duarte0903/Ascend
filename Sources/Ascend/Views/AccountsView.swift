@@ -2,12 +2,29 @@ import SwiftUI
 import SwiftData
 import AppKit
 
+/// A type being filled in. It is not inserted until it has a name, so the
+/// list never shows a placeholder pretending to be a real type.
+private struct DraftAccountType {
+    var name = ""
+    var includeInUsable = true
+    var countsAsSavings = false
+    var annualReturn: Double = 0
+}
+
 struct AccountsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query private var records: [BalanceRecord]
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
     @Query(sort: \AccountCategory.sortOrder) private var categories: [AccountCategory]
+    /// Settings are edited on other screens now, so this view has to watch
+    /// them: without a query on the object, a change elsewhere leaves these
+    /// figures stale until the screen is left and re-entered.
+    @Query private var storedSettings: [AppSettings]
+
+    private var settings: AppSettings {
+        storedSettings.first ?? SeedData.settings(in: context)
+    }
 
     @State private var showingNewAccount = false
     @State private var newName = ""
@@ -18,6 +35,8 @@ struct AccountsView: View {
     @State private var pendingDeletion: Account?
 
     @State private var showingTypes = false
+    @State private var draftType: DraftAccountType?
+    @FocusState private var draftTypeFocused: Bool
     @State private var iconPickerFor: UUID?
 
     private var active: [Account] { accounts.filter { !$0.isArchived } }
@@ -26,22 +45,19 @@ struct AccountsView: View {
     private var latest: DerivedRecord? {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context),
+            settings: settings,
             expenses: expenseItems)).last
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                Callout(text: "Changes here re-derive every screen immediately. Archiving keeps an account's history intact; deleting rewrites it.")
+        FillingScreen {
+            Callout(text: "Changes here re-derive every screen immediately. Archiving keeps an account's history intact; deleting rewrites it.")
 
-                ForEach(active) { account in
-                    accountCard(account)
-                }
-
-                if !archived.isEmpty { archivedCard }
+            ForEach(active) { account in
+                accountCard(account)
             }
-            .padding(Theme.screenPadding)
+
+            if !archived.isEmpty { archivedCard }
         }
         .toolbar {
             Button("Account Types…", systemImage: "tag") { showingTypes = true }
@@ -100,10 +116,11 @@ struct AccountsView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
                         typeRow(category)
-                        if index < categories.count - 1 {
+                        if index < categories.count - 1 || draftType != nil {
                             Divider().padding(.leading, 20)
                         }
                     }
+                    if draftType != nil { draftTypeRow }
                 }
             }
             .frame(height: 232)
@@ -217,20 +234,78 @@ struct AccountsView: View {
         .padding(.vertical, 8)
     }
 
-    /// Adds a type immediately with a free name, ready to be renamed in place —
-    /// no second dialog stacked on top of this one.
+    /// Opens a row to fill in rather than inserting a type called "New type".
+    /// A placeholder in the list is indistinguishable from a real type, and
+    /// leaves one behind whenever the button is pressed by accident.
     private func addType() {
-        let existing = Set(categories.map { $0.name.lowercased() })
-        var name = "New type"
-        var suffix = 2
-        while existing.contains(name.lowercased()) {
-            name = "New type \(suffix)"
-            suffix += 1
+        draftType = DraftAccountType()
+    }
+
+    /// The same columns as a real row, so the list does not jump when the type
+    /// becomes real.
+    private var draftTypeRow: some View {
+        HStack(spacing: 12) {
+            TextField("Name", text: Binding(
+                get: { draftType?.name ?? "" },
+                set: { draftType?.name = $0 }))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: Theme.Size.name)
+                .focused($draftTypeFocused)
+                .onSubmit(commitDraftType)
+                .onAppear { draftTypeFocused = true }
+
+            Toggle("", isOn: Binding(
+                get: { draftType?.includeInUsable ?? true },
+                set: { draftType?.includeInUsable = $0 }))
+                .labelsHidden()
+                .frame(width: Theme.Size.control)
+
+            Toggle("", isOn: Binding(
+                get: { draftType?.countsAsSavings ?? false },
+                set: { draftType?.countsAsSavings = $0 }))
+                .labelsHidden()
+                .frame(width: Theme.Size.control)
+
+            MoneyField(value: Binding(
+                get: { (draftType?.annualReturn ?? 0) * 100 },
+                set: { draftType?.annualReturn = $0 / 100 }),
+                decimals: 2, width: Theme.Size.fieldSmall, suffix: "%")
+
+            Text("—")
+                .font(.figure(12.5))
+                .foregroundStyle(Color.ftInkTertiary)
+                .frame(width: Theme.Size.control, alignment: .trailing)
+
+            Button("Add", action: commitDraftType)
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .disabled((draftType?.name ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+
+            Button("Cancel") { draftType = nil }
+                .controlSize(.small)
+                .keyboardShortcut(.cancelAction)
+
+            Spacer(minLength: 0)
         }
+        .toggleStyle(.checkbox)
+        .controlSize(.small)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.ftSurfaceAlt)
+    }
+
+    private func commitDraftType() {
+        guard let draft = draftType else { return }
         do {
-            _ = try AccountService.createCategory(
-                name: name, includeInUsable: true, countsAsSavings: false, in: context)
+            _ = try AccountService.createCategory(name: draft.name,
+                                                  includeInUsable: draft.includeInUsable,
+                                                  countsAsSavings: draft.countsAsSavings,
+                                                  annualReturn: draft.annualReturn,
+                                                  in: context)
+            draftType = nil
         } catch {
+            // Left open with what was typed still in it, so a clashing name can
+            // be corrected rather than retyped.
             errorMessage = error.localizedDescription
         }
     }

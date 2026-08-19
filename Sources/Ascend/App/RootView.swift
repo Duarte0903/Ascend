@@ -13,6 +13,8 @@ struct RootView: View {
     @State private var showingProfileManager = false
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
 
+    private var profileKind: ProfileKind { profiles.registry.active.kind }
+
     private var appearance: Binding<AppearanceSetting> {
         Binding(get: { AppearanceSetting(rawValue: appearanceRaw) ?? .system },
                 set: { appearanceRaw = $0.rawValue })
@@ -45,7 +47,7 @@ struct RootView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
-            ForEach(AppSection.groups, id: \.label) { group in
+            ForEach(AppSection.groups(for: profileKind), id: \.label) { group in
                 SwiftUI.Section {
                     ForEach(group.items) { section in
                         Label {
@@ -95,17 +97,23 @@ struct RootView: View {
             .overlay(Divider(), alignment: .top)
         }
         .onAppear { appearance.wrappedValue.apply() }
+        .onChange(of: profileKind) { _, kind in
+            if !selection.isAvailable(to: kind) { selection = .dashboard }
+        }
     }
 
     private var detail: some View {
         Group {
-            switch selection {
+            // Falls back rather than trusting the selection: a screen that is
+            // not in the sidebar must not be reachable by any route.
+            switch selection.isAvailable(to: profileKind) ? selection : .dashboard {
             case .dashboard: DashboardView()
             case .balances: BalancesView()
             case .trends: TrendsView()
             case .allocation: AllocationView()
             case .investments: InvestmentsView()
             case .expenses: ExpensesView()
+            case .tax: TaxView()
             case .goals: GoalsView()
             case .projections: ProjectionsView()
             case .accounts: AccountsView()

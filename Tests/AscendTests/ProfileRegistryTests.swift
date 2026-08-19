@@ -318,3 +318,46 @@ struct ProfileKindTests {
         #expect(decoded.active.kind == .person)
     }
 }
+
+@Suite("Sidebar sections")
+struct AppSectionAvailabilityTests {
+
+    private func sections(for kind: ProfileKind) -> [AppSection] {
+        AppSection.groups(for: kind).flatMap(\.items)
+    }
+
+    @Test("A person gets every screen, tax included")
+    func personSeesTax() {
+        #expect(sections(for: .person).contains(.tax))
+        #expect(AppSection.tax.isAvailable(to: .person))
+    }
+
+    @Test("An organisation is not offered a personal income tax screen")
+    func organizationHasNoTax() {
+        #expect(!sections(for: .organization).contains(.tax))
+        #expect(!AppSection.tax.isAvailable(to: .organization))
+    }
+
+    @Test("Only tax is withheld — every other screen is offered to both")
+    func nothingElseIsHidden() {
+        let hidden = Set(sections(for: .person)).subtracting(sections(for: .organization))
+        #expect(hidden == [.tax])
+    }
+
+    @Test("Groups keep their order and none is left empty")
+    func groupsStayIntact() {
+        for kind in ProfileKind.allCases {
+            let groups = AppSection.groups(for: kind)
+            #expect(groups.map(\.label) == ["Overview", "Planning", "Setup"])
+            #expect(groups.allSatisfy { !$0.items.isEmpty })
+        }
+    }
+
+    @Test("Every section reachable in the sidebar is unique")
+    func noDuplicates() {
+        for kind in ProfileKind.allCases {
+            let items = sections(for: kind)
+            #expect(Set(items).count == items.count)
+        }
+    }
+}

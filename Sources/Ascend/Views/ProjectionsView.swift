@@ -7,8 +7,14 @@ struct ProjectionsView: View {
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
+    /// Settings are edited on other screens now, so this view has to watch
+    /// them: without a query on the object, a change elsewhere leaves these
+    /// figures stale until the screen is left and re-entered.
+    @Query private var storedSettings: [AppSettings]
 
-    private var settings: AppSettings { SeedData.settings(in: context) }
+    private var settings: AppSettings {
+        storedSettings.first ?? SeedData.settings(in: context)
+    }
     private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
     private var projection: Projection {
@@ -19,30 +25,29 @@ struct ProjectionsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Theme.gap) {
-                if !projection.assumptions.hasLeftoverDestination {
-                    Callout(text: "No account is set to receive the monthly leftover, so the surplus isn't being allocated. Pick one on the Accounts screen.",
-                            systemImage: "exclamationmark.triangle.fill",
-                            tint: .orange)
-                }
-
-                HStack(alignment: .top, spacing: Theme.gap) {
-                    assumptionsCard
-                    outlookCard
-                }
-
-                if projection.months.isEmpty {
-                    ContentUnavailableView("Nothing to project yet",
-                                           systemImage: "chart.line.uptrend.xyaxis",
-                                           description: Text("Add a record on the Balances screen."))
-                        .frame(height: 240)
-                } else {
-                    forecastChart
-                    monthTable
-                }
+        FillingScreen {
+            if !projection.assumptions.hasLeftoverDestination {
+                Callout(text: "No account is set to receive the monthly leftover, so the surplus isn't being allocated. Pick one on the Accounts screen.",
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: .orange)
             }
-            .padding(Theme.screenPadding)
+
+            HStack(alignment: .top, spacing: Theme.gap) {
+                assumptionsCard
+                outlookCard
+            }
+
+            if projection.months.isEmpty {
+                ContentUnavailableView("Nothing to project yet",
+                                       systemImage: "chart.line.uptrend.xyaxis",
+                                       description: Text("Add a record on the Balances screen."))
+                    .frame(height: 240)
+            } else {
+                forecastChart
+                // Absorbs whatever height the screen has left, which is what
+                // FillingScreen expects one card on the screen to do.
+                monthTable.fillsHeight(minimum: 240)
+            }
         }
     }
 
@@ -51,12 +56,27 @@ struct ProjectionsView: View {
     private var assumptionsCard: some View {
         CardSection("Assumptions", subtitle: "Grey rows are worked out from the others") {
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 11) {
-                GridRow {
-                    Text("Monthly net income").font(.system(size: 12.5))
-                    MoneyField(value: Binding(
-                        get: { settings.monthlyNetIncome },
-                        set: { settings.monthlyNetIncome = max(0, $0); try? context.save() }),
-                        decimals: 2)
+                // Nothing about income is editable here while the Tax screen is
+                // feeding it: a second place to type the same figure is a
+                // second place for it to disagree with itself.
+                if projection.assumptions.derivesNetIncome {
+                    GridRow {
+                        Text("Monthly net income")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Color.ftInkTertiary)
+                        DerivedText(text: Money.currency(projection.assumptions.monthlyNetIncome),
+                                    width: Theme.Size.field)
+                            .help("Worked out on the Tax screen: after tax and social security, with anything that cannot be spent freely held back. Spread over twelve months, so it is larger than one salary payment. Change your salary there.")
+                    }
+                } else {
+                    GridRow {
+                        Text("Monthly net income").font(.system(size: 12.5))
+                        MoneyField(value: Binding(
+                            get: { settings.monthlyNetIncome },
+                            set: { settings.monthlyNetIncome = max(0, $0); try? context.save() }),
+                            decimals: 2)
+                            .help("Used until a gross salary is set above, after which it is worked out for you.")
+                    }
                 }
                 GridRow {
                     Text("Monthly expenses")

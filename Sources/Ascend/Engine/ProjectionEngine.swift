@@ -2,6 +2,9 @@ import Foundation
 
 struct ProjectionAssumptions: Sendable {
     var monthlyNetIncome: Double
+    /// True when income came from the tax estimate rather than being typed, so
+    /// screens can show it as worked out instead of offering a dead edit.
+    var derivesNetIncome: Bool = false
     var maxMonthlyExpenses: Double
     /// Sum of every account's monthly contribution — derived, never typed.
     var totalInvestedPerMonth: Double
@@ -73,6 +76,7 @@ enum ProjectionEngine {
 
         let assumptions = ProjectionAssumptions(
             monthlyNetIncome: input.monthlyNetIncome,
+            derivesNetIncome: input.derivesNetIncome,
             maxMonthlyExpenses: input.maxMonthlyExpenses,
             totalInvestedPerMonth: totalInvested,
             leftoverPerMonth: leftover,

@@ -2,6 +2,12 @@ import SwiftUI
 import SwiftData
 import Charts
 
+/// A category being filled in, before it exists.
+private struct DraftExpenseCategory {
+    var name = ""
+    var colorHex: String
+}
+
 struct ExpensesView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Expense.sortOrder) private var expenses: [Expense]
@@ -10,6 +16,8 @@ struct ExpensesView: View {
 
     @State private var errorMessage: String?
     @State private var showingCategories = false
+    @State private var draftCategory: DraftExpenseCategory?
+    @FocusState private var draftCategoryFocused: Bool
     @State private var hoveredRow: UUID?
 
     private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
@@ -319,10 +327,11 @@ struct ExpensesView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
                         categoryRow(category)
-                        if index < categories.count - 1 {
+                        if index < categories.count - 1 || draftCategory != nil {
                             Divider().padding(.leading, 20)
                         }
                     }
+                    if draftCategory != nil { draftCategoryRow }
                 }
             }
             .frame(height: 300)
@@ -396,21 +405,58 @@ struct ExpensesView: View {
         }
     }
 
+    /// Opens a row to fill in rather than inserting one called "New category".
+    /// A placeholder is indistinguishable from a real category and is left
+    /// behind whenever the button is pressed by accident.
     private func addCategory() {
-        let existing = Set(categories.map { $0.name.lowercased() })
-        var name = "New category"
-        var suffix = 2
-        while existing.contains(name.lowercased()) {
-            name = "New category \(suffix)"
-            suffix += 1
-        }
         let palette = Theme.accountPalette
+        draftCategory = DraftExpenseCategory(
+            colorHex: palette[categories.count % palette.count])
+    }
+
+    /// The same columns as a real row, so nothing shifts when it is created.
+    private var draftCategoryRow: some View {
+        HStack(spacing: 12) {
+            ColorPicker("", selection: Binding(
+                get: { Color(hex: draftCategory?.colorHex ?? Theme.accountPalette[0]) },
+                set: { draftCategory?.colorHex = $0.hexString }))
+                .labelsHidden()
+
+            TextField("Name", text: Binding(
+                get: { draftCategory?.name ?? "" },
+                set: { draftCategory?.name = $0 }))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: Theme.Size.name)
+                .focused($draftCategoryFocused)
+                .onSubmit(commitDraftCategory)
+                .onAppear { draftCategoryFocused = true }
+
+            Spacer(minLength: 8)
+
+            Button("Add", action: commitDraftCategory)
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .disabled((draftCategory?.name ?? "")
+                    .trimmingCharacters(in: .whitespaces).isEmpty)
+
+            Button("Cancel") { draftCategory = nil }
+                .controlSize(.small)
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.ftSurfaceAlt)
+    }
+
+    private func commitDraftCategory() {
+        guard let draft = draftCategory else { return }
         do {
-            try ExpenseService.createCategory(
-                name: name,
-                colorHex: palette[categories.count % palette.count],
-                in: context)
+            try ExpenseService.createCategory(name: draft.name,
+                                              colorHex: draft.colorHex,
+                                              in: context)
+            draftCategory = nil
         } catch {
+            // Kept open with what was typed, so a clash can be corrected.
             errorMessage = error.localizedDescription
         }
     }

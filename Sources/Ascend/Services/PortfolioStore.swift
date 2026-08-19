@@ -16,7 +16,8 @@ enum PortfolioStore {
             targetNetWorth: settings.targetNetWorth,
             monthlyNetIncome: settings.monthlyNetIncome,
             projectionHorizonMonths: settings.projectionHorizonMonths,
-            investmentReturnTarget: settings.investmentReturnTarget)
+            investmentReturnTarget: settings.investmentReturnTarget,
+            tax: settings.taxInput)
     }
 
     /// Includes archived accounts, so historical totals stay intact after an

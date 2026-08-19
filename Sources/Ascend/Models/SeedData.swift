@@ -168,6 +168,96 @@ enum SeedData {
         if changed || !categories.isEmpty { try? context.save() }
     }
 
+    /// Moves a store that recorded which year of the young-taxpayer scheme you
+    /// were in onto the year it started, which never needs touching again.
+    ///
+    /// The old field is cleared as it is read, so this cannot run twice and
+    /// switch the scheme back on after it has been turned off.
+    static func migrateYoungTaxpayerStart(_ context: ModelContext) {
+        guard let all = try? context.fetch(FetchDescriptor<AppSettings>()) else { return }
+        var changed = false
+        for settings in all where settings.taxYoungTaxpayerYear > 0 {
+            if settings.taxYoungTaxpayerFirstYear == 0 {
+                settings.taxYoungTaxpayerFirstYear =
+                    settings.taxTable.year - settings.taxYoungTaxpayerYear + 1
+            }
+            settings.taxYoungTaxpayerYear = 0
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
+
+    /// Moves a saved rate table still carrying the meal allowance limits the
+    /// app used to ship onto the current ones.
+    ///
+    /// Only those exact figures are touched, so a limit set by hand is never
+    /// overwritten, and re-running this changes nothing.
+    static func migrateMealAllowanceLimits(_ context: ModelContext) {
+        let shipped = (cash: 6.00, card: 10.20)
+        let current = TaxYear.portugalDefaults
+        guard let all = try? context.fetch(FetchDescriptor<AppSettings>()) else { return }
+        var changed = false
+        for settings in all {
+            var table = settings.taxTable
+            var edited = false
+            // Checked one at a time rather than as a pair: someone who changed
+            // the cash limit — irrelevant when you are paid on a card — should
+            // still have the card limit brought up to date.
+            if abs(table.mealAllowanceCashLimit - shipped.cash) < 0.005 {
+                table.mealAllowanceCashLimit = current.mealAllowanceCashLimit
+                edited = true
+            }
+            if abs(table.mealAllowanceCardLimit - shipped.card) < 0.005 {
+                table.mealAllowanceCardLimit = current.mealAllowanceCardLimit
+                edited = true
+            }
+            if edited { settings.taxTable = table; changed = true }
+        }
+        if changed { try? context.save() }
+    }
+
+    /// The escalões the app shipped with before the 2026 ones.
+    private static let bands2025: [TaxBracket] = [
+        TaxBracket(upperLimit: 8_059, rate: 0.130),
+        TaxBracket(upperLimit: 12_160, rate: 0.165),
+        TaxBracket(upperLimit: 17_233, rate: 0.220),
+        TaxBracket(upperLimit: 22_306, rate: 0.250),
+        TaxBracket(upperLimit: 28_400, rate: 0.320),
+        TaxBracket(upperLimit: 41_629, rate: 0.355),
+        TaxBracket(upperLimit: 44_987, rate: 0.435),
+        TaxBracket(upperLimit: 83_696, rate: 0.450),
+        TaxBracket(upperLimit: nil, rate: 0.480),
+    ]
+
+    /// Moves a saved table still on the previous year's escalões onto the
+    /// current ones. Only that exact scale is replaced, so a band edited by
+    /// hand keeps the whole table as it was.
+    static func migrateTaxBands(_ context: ModelContext) {
+        guard let all = try? context.fetch(FetchDescriptor<AppSettings>()) else { return }
+        var changed = false
+        for settings in all where settings.taxTable.brackets == bands2025 {
+            var table = settings.taxTable
+            table.brackets = TaxYear.portugalDefaults.brackets
+            settings.taxTable = table
+            changed = true
+        }
+        if changed { try? context.save() }
+    }
+
+    /// Clears young-taxpayer skips left beyond the end of the scheme by an
+    /// earlier version, which counted them but never showed them.
+    static func migrateYoungTaxpayerSkips(_ context: ModelContext) {
+        guard let all = try? context.fetch(FetchDescriptor<AppSettings>()) else { return }
+        var changed = false
+        for settings in all where !settings.taxYoungTaxpayerSkipped.isEmpty {
+            let before = settings.taxYoungTaxpayerSkipped
+            // The setter prunes, so writing it back is the whole repair.
+            settings.taxYoungTaxpayerSkipped = before
+            if settings.taxYoungTaxpayerSkipped != before { changed = true }
+        }
+        if changed { try? context.save() }
+    }
+
     static func settings(in context: ModelContext) -> AppSettings {
         if let existing = try? context.fetch(FetchDescriptor<AppSettings>()).first {
             return existing

@@ -10,6 +10,14 @@ struct ProfileView: View {
     @Query(sort: \Account.sortOrder) private var accounts: [Account]
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
+    /// Settings are edited on other screens now, so this view has to watch
+    /// them: without a query on the object, a change elsewhere leaves these
+    /// figures stale until the screen is left and re-entered.
+    @Query private var storedSettings: [AppSettings]
+
+    private var settings: AppSettings {
+        storedSettings.first ?? SeedData.settings(in: context)
+    }
 
     @State private var errorMessage: String?
 
@@ -18,7 +26,7 @@ struct ProfileView: View {
     private var netWorth: Double? {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
-            settings: SeedData.settings(in: context),
+            settings: settings,
             expenses: expenseItems)).last?.total
     }
 
