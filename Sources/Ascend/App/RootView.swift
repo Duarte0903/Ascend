@@ -7,7 +7,10 @@ struct RootView: View {
     @Query(sort: \BalanceRecord.date) private var records: [BalanceRecord]
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
+    @Environment(ProfileStore.self) private var profiles
     @State private var selection: AppSection = .dashboard
+    @State private var showingNewProfile = false
+    @State private var showingProfileManager = false
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
 
     private var appearance: Binding<AppearanceSetting> {
@@ -27,6 +30,16 @@ struct RootView: View {
             sidebar
         } detail: {
             detail
+        }
+        .sheet(isPresented: $showingNewProfile) {
+            NewProfileSheet(isPresented: $showingNewProfile)
+        }
+        .alert("Couldn't do that",
+               isPresented: Binding(get: { profiles.lastError != nil },
+                                    set: { if !$0 { profiles.lastError = nil } })) {
+            Button("OK") { profiles.lastError = nil }
+        } message: {
+            Text(profiles.lastError ?? "")
         }
     }
 
@@ -53,6 +66,19 @@ struct RootView: View {
         }
         .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 196, ideal: 214, max: 260)
+        .safeAreaInset(edge: .top) {
+            ProfileSwitcher(showingNew: $showingNewProfile,
+                            showingManager: $showingProfileManager)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.bar)
+                .overlay(Divider(), alignment: .bottom)
+                .popover(isPresented: $showingProfileManager, arrowEdge: .bottom) {
+                    ProfileManager(isPresented: $showingProfileManager,
+                                   showingNew: $showingNewProfile)
+                }
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 1) {
                 Eyebrow("Net worth")
@@ -78,10 +104,12 @@ struct RootView: View {
             case .balances: BalancesView()
             case .trends: TrendsView()
             case .allocation: AllocationView()
+            case .investments: InvestmentsView()
             case .expenses: ExpensesView()
             case .goals: GoalsView()
             case .projections: ProjectionsView()
             case .accounts: AccountsView()
+            case .profile: ProfileView()
             }
         }
         .background(Color.ftCanvas)

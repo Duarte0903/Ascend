@@ -15,7 +15,8 @@ enum PortfolioStore {
             expenses: expenses.sorted { $0.sortOrder < $1.sortOrder }.map { $0.toInput() },
             targetNetWorth: settings.targetNetWorth,
             monthlyNetIncome: settings.monthlyNetIncome,
-            projectionHorizonMonths: settings.projectionHorizonMonths)
+            projectionHorizonMonths: settings.projectionHorizonMonths,
+            investmentReturnTarget: settings.investmentReturnTarget)
     }
 
     /// Includes archived accounts, so historical totals stay intact after an

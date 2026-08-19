@@ -5,32 +5,43 @@ import UniformTypeIdentifiers
 
 @main
 struct AscendApp: App {
-    let container: ModelContainer
+    /// Owns both the profile list and the open profile's store. Seeding and
+    /// migration moved in here, because they now happen per profile.
+    @State private var profiles = ProfileStore()
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
-
-    init() {
-        let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self, BalanceEntry.self,
-                         AppSettings.self, Expense.self, ExpenseCategory.self])
-        do {
-            container = try ModelContainer(for: schema)
-        } catch {
-            fatalError("Could not create the data store: \(error)")
-        }
-        let context = ModelContext(container)
-        SeedData.seedIfNeeded(context)
-        SeedData.migrateLegacyColors(context)
-        SeedData.migrateCategories(context)
-        SeedData.migrateExpenses(context)
-        SeedData.migrateExpenseAccounts(context)
-    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
+                // Switching profiles rebuilds the window from scratch, so no
+                // screen keeps a selection or a half-typed field from the
+                // profile you just left.
+                .id(profiles.registry.activeID)
+                // Installed here rather than on the WindowGroup: as a Scene
+                // modifier it is not re-applied when the container changes, so
+                // switching profiles left every screen querying the old store.
+                .modelContainer(profiles.container)
+                .environment(profiles)
         }
-        .modelContainer(container)
         .defaultSize(width: 1180, height: 800)
         .commands {
+            CommandGroup(after: .newItem) {
+                Menu("Switch Profile") {
+                    ForEach(profiles.registry.profiles) { profile in
+                        Button {
+                            profiles.activate(profile.id)
+                        } label: {
+                            HStack {
+                                Text(profile.name)
+                                if profile.id == profiles.registry.activeID {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+                .disabled(profiles.registry.profiles.count < 2)
+            }
             CommandGroup(after: .saveItem) {
                 Button("Export Backup…") { exportBackup() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
@@ -60,19 +71,15 @@ struct AscendApp: App {
 
     @MainActor
     private func exportBackup() {
-        let context = ModelContext(container)
-        guard let accounts = try? context.fetch(FetchDescriptor<Account>()),
-              let records = try? context.fetch(FetchDescriptor<BalanceRecord>()),
-              let data = try? BackupService.export(
-                  accounts: accounts, records: records,
-                  settings: SeedData.settings(in: context),
-                  categories: (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? [],
-                  expenses: (try? context.fetch(FetchDescriptor<Expense>())) ?? [],
-                  expenseCategories: (try? context.fetch(FetchDescriptor<ExpenseCategory>())) ?? [])
-        else { return }
+        guard let data = profiles.backupOfActive() else { return }
 
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "ascend-backup.json"
+        // Named after the profile, so backups of two profiles don't overwrite
+        // each other in the same folder.
+        let slug = profiles.registry.active.name
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+        panel.nameFieldStringValue = "ascend-\(slug)-backup.json"
         panel.allowedContentTypes = [.json]
         if panel.runModal() == .OK, let url = panel.url {
             try? data.write(to: url)
@@ -86,6 +93,7 @@ struct AscendApp: App {
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url,
               let data = try? Data(contentsOf: url) else { return }
-        try? BackupService.restore(from: data, into: ModelContext(container))
+        // Restores into the open profile only; the others are untouched.
+        profiles.restoreIntoActive(data)
     }
 }

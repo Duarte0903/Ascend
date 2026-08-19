@@ -41,15 +41,18 @@ struct ExpensesView: View {
                 }
             }
         }
+        .onHover { if !$0 { hoveredRow = nil } }
         .toolbar {
             ToolbarItemGroup {
                 Button("Categories…", systemImage: "tag") { showingCategories = true }
                     .help("Create and edit expense categories")
+                    .popover(isPresented: $showingCategories, arrowEdge: .bottom) {
+                        categorySheet
+                    }
                 Button("Add Expense", systemImage: "plus") { addExpense() }
                     .keyboardShortcut("n")
             }
         }
-        .sheet(isPresented: $showingCategories) { categorySheet }
         .alert("Couldn't do that",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
@@ -108,8 +111,8 @@ struct ExpensesView: View {
         // The name column flexes so the table fills the window at any width,
         // while every numeric column keeps the same width as the field in it.
         CardSection("Commitments", subtitle: "Amounts are as billed; the monthly column normalises them") {
-            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 0) {
-                GridRow {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 14) {
                     Text("Name").frame(maxWidth: .infinity, alignment: .leading)
                     Text("Amount").frame(width: Theme.Size.field, alignment: .trailing)
                     Text("Frequency").frame(width: Theme.Size.picker, alignment: .leading)
@@ -123,20 +126,19 @@ struct ExpensesView: View {
                 .font(.tableHeader)
                 .tracking(Theme.tableHeaderTracking)
                 .foregroundStyle(Color.ftInkSecondary)
+                .padding(.horizontal, 6)
                 .padding(.bottom, 8)
 
-                Divider().gridCellUnsizedAxes(.horizontal)
+                Divider()
 
                 ForEach(Array(expenses.enumerated()), id: \.element.id) { index, expense in
                     row(expense)
-                    if index < expenses.count - 1 {
-                        Divider().gridCellUnsizedAxes(.horizontal).opacity(0.6)
-                    }
+                    if index < expenses.count - 1 { Divider().opacity(0.6) }
                 }
 
-                Divider().gridCellUnsizedAxes(.horizontal)
+                Divider()
 
-                GridRow {
+                HStack(spacing: 14) {
                     Text("Total").font(.system(size: 12.5, weight: .semibold))
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Color.clear.frame(width: Theme.Size.field, height: 1)
@@ -150,13 +152,14 @@ struct ExpensesView: View {
                     Color.clear.frame(width: Theme.Size.control, height: 1)
                     Color.clear.frame(width: Theme.Size.iconButton)
                 }
+                .padding(.horizontal, 6)
                 .padding(.top, 6)
             }
         }
     }
 
     private func row(_ expense: Expense) -> some View {
-        GridRow {
+        HStack(spacing: 14) {
             NameField(name: expense.name) { newValue in
                 do { try ExpenseService.rename(expense, to: newValue, in: context) }
                 catch { errorMessage = error.localizedDescription }
@@ -235,8 +238,11 @@ struct ExpensesView: View {
             .frame(width: Theme.Size.iconButton)
         }
         .padding(.vertical, 5)
-        .background(hoveredRow == expense.id ? Color.ftSurfaceAlt : .clear)
-        .onHover { hoveredRow = $0 ? expense.id : (hoveredRow == expense.id ? nil : hoveredRow) }
+        .padding(.horizontal, 6)
+        .background(hoveredRow == expense.id ? Color.ftSurfaceAlt : .clear,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .contentShape(Rectangle())
+        .onHover { if $0 { hoveredRow = expense.id } }
     }
 
     // MARK: - Breakdown
@@ -302,15 +308,10 @@ struct ExpensesView: View {
 
     private var categorySheet: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Expense Categories").font(.system(size: 17, weight: .semibold))
-                Text("Group your commitments. A category still in use can't be deleted.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.ftInkTertiary)
+            DialogHeader(title: "Expense Categories",
+                         subtitle: "Group your commitments. A category still in use can't be deleted.") {
+                showingCategories = false
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 14)
 
             Divider()
 

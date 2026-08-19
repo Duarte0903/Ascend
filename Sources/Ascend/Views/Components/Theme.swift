@@ -44,6 +44,8 @@ enum Theme {
         static let stripe: CGFloat = 4
         /// Account icons. Three deliberate scales — every icon at a given scale
         /// is the same size, whether it is a custom image or a default symbol.
+        static let detailValue: CGFloat = 320  // editable cell in a detail table
+        static let avatar: CGFloat = 48        // profile picture, Profile tab
         static let iconLarge: CGFloat = 40     // account cards
         static let iconMedium: CGFloat = 20    // archived list
         static let iconInline: CGFloat = 16    // table headers

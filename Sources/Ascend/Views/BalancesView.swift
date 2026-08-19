@@ -60,21 +60,27 @@ struct BalancesView: View {
         }
     }
 
+    /// Rows are HStacks rather than GridRows on purpose. SwiftUI applies a
+    /// modifier put on a GridRow to each of its cells, so a row background
+    /// painted that way stops at every cell boundary and a hover handler fires
+    /// an exit each time the pointer crosses one. Every column here has an
+    /// explicit width, so Grid was doing no alignment work worth that cost.
     private var table: some View {
         ScrollView(.horizontal, showsIndicators: true) {
-            Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 headerRow
-                Divider().gridCellUnsizedAxes(.horizontal)
+                Divider()
                 ForEach(Array(derived.enumerated()), id: \.element.id) { index, row in
                     rowView(row)
-                    if index < derived.count - 1 {
-                        Divider().gridCellUnsizedAxes(.horizontal).opacity(0.6)
-                    }
+                    if index < derived.count - 1 { Divider().opacity(0.6) }
                 }
             }
             .padding(Theme.cardPadding)
         }
         .ftCard(padding: 0)
+        // The pointer leaving the table is the only thing that clears the
+        // highlight; moving between cells never does.
+        .onHover { if !$0 { hoveredRow = nil } }
     }
 
     /// Account columns are as wide as the longest account name needs, so names
@@ -98,7 +104,7 @@ struct BalancesView: View {
     }
 
     private var headerRow: some View {
-        GridRow {
+        HStack(spacing: 14) {
             Text("Date").frame(width: Theme.Size.field, alignment: .leading)
             ForEach(activeAccounts) { account in
                 HStack(spacing: 6) {
@@ -122,13 +128,14 @@ struct BalancesView: View {
         .font(.tableHeader)
         .tracking(Theme.tableHeaderTracking)
         .foregroundStyle(Color.ftInkSecondary)
+        .padding(.horizontal, 6)
         .padding(.bottom, 8)
     }
 
     @ViewBuilder
     private func rowView(_ row: DerivedRecord) -> some View {
         if let record = records.first(where: { $0.id == row.id }) {
-            GridRow {
+            HStack(spacing: 14) {
                 DatePicker("", selection: Binding(
                     get: { record.date },
                     set: { record.date = $0; try? context.save() }),
@@ -170,8 +177,11 @@ struct BalancesView: View {
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 5)
-            .background(hoveredRow == row.id ? Color.ftSurfaceAlt : .clear)
-            .onHover { hoveredRow = $0 ? row.id : (hoveredRow == row.id ? nil : hoveredRow) }
+            .padding(.horizontal, 6)
+            .background(hoveredRow == row.id ? Color.ftSurfaceAlt : .clear,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+            .onHover { if $0 { hoveredRow = row.id } }
         }
     }
 

@@ -17,6 +17,10 @@ final class Account {
     var countsAsSavings: Bool = false
     var expectedAnnualReturn: Double = 0
     var monthlyContribution: Double = 0
+    /// What you have put into this account, for measuring investment profit.
+    var amountInvested: Double = 0
+    /// Whether this account appears on the Investments screen.
+    var investmentTrackingRaw: String = InvestmentTracking.auto.rawValue
     var isLeftoverDestination: Bool = false
     var isArchived: Bool = false
     var archivedAt: Date?
@@ -24,11 +28,21 @@ final class Account {
     /// `.externalStorage` keeps the image out of the store file itself.
     @Attribute(.externalStorage) var iconData: Data?
 
+    var investmentTracking: InvestmentTracking {
+        get { InvestmentTracking(rawValue: investmentTrackingRaw) ?? .auto }
+        set { investmentTrackingRaw = newValue.rawValue }
+    }
+
+    /// Resolved against the savings flag, which is what `auto` defers to.
+    var isTrackedInvestment: Bool {
+        investmentTracking.tracks(countsAsSavings: countsAsSavings)
+    }
+
     init(id: UUID = UUID(), name: String, note: String = "",
          categoryID: UUID? = nil, legacyKind: String = "main", colorHex: String,
          sortOrder: Int, includeInUsable: Bool, countsAsSavings: Bool,
          expectedAnnualReturn: Double = 0, monthlyContribution: Double = 0,
-         isLeftoverDestination: Bool = false) {
+         isLeftoverDestination: Bool = false, amountInvested: Double = 0) {
         self.id = id
         self.name = name
         self.note = note
@@ -41,6 +55,7 @@ final class Account {
         self.expectedAnnualReturn = expectedAnnualReturn
         self.monthlyContribution = monthlyContribution
         self.isLeftoverDestination = isLeftoverDestination
+        self.amountInvested = amountInvested
     }
 
     func toInfo() -> AccountInfo {
@@ -49,6 +64,8 @@ final class Account {
                     countsAsSavings: countsAsSavings,
                     expectedAnnualReturn: expectedAnnualReturn,
                     monthlyContribution: monthlyContribution,
-                    isLeftoverDestination: isLeftoverDestination)
+                    isLeftoverDestination: isLeftoverDestination,
+                    amountInvested: amountInvested,
+                    investmentTracking: investmentTracking)
     }
 }

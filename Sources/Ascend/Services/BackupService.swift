@@ -13,6 +13,8 @@ struct BackupFile: Codable {
         var categoryID: UUID?
         /// Base64 PNG of the account's custom icon, if it has one.
         var iconBase64: String?
+        var amountInvested: Double?
+        var investmentTracking: String?
     }
     struct CategoryDTO: Codable {
         var id: UUID, name: String, sortOrder: Int
@@ -33,8 +35,9 @@ struct BackupFile: Codable {
     struct SettingsDTO: Codable {
         var targetNetWorth: Double, monthlyNetIncome: Double
         var maxMonthlyExpenses: Double, projectionHorizonMonths: Int
+        var investmentReturnTarget: Double?
     }
-    var version = 4
+    var version = 5
     var accounts: [AccountDTO]
     var records: [RecordDTO]
     var settings: SettingsDTO
@@ -60,7 +63,9 @@ enum BackupService {
                       isLeftoverDestination: $0.isLeftoverDestination,
                       isArchived: $0.isArchived,
                       note: $0.note, categoryID: $0.categoryID,
-                      iconBase64: $0.iconData?.base64EncodedString())
+                      iconBase64: $0.iconData?.base64EncodedString(),
+                      amountInvested: $0.amountInvested,
+                      investmentTracking: $0.investmentTrackingRaw)
             },
             records: records.map { record in
                 var balances: [String: Double] = [:]
@@ -71,7 +76,8 @@ enum BackupService {
             settings: .init(targetNetWorth: settings.targetNetWorth,
                             monthlyNetIncome: settings.monthlyNetIncome,
                             maxMonthlyExpenses: settings.maxMonthlyExpenses,
-                            projectionHorizonMonths: settings.projectionHorizonMonths),
+                            projectionHorizonMonths: settings.projectionHorizonMonths,
+                            investmentReturnTarget: settings.investmentReturnTarget),
             categories: categories.map {
                 .init(id: $0.id, name: $0.name, sortOrder: $0.sortOrder,
                       defaultIncludeInUsable: $0.defaultIncludeInUsable,
@@ -150,7 +156,10 @@ enum BackupService {
                 includeInUsable: dto.includeInUsable, countsAsSavings: dto.countsAsSavings,
                 expectedAnnualReturn: dto.expectedAnnualReturn,
                 monthlyContribution: dto.monthlyContribution,
-                isLeftoverDestination: dto.isLeftoverDestination)
+                isLeftoverDestination: dto.isLeftoverDestination,
+                amountInvested: dto.amountInvested ?? 0)
+            account.investmentTrackingRaw = dto.investmentTracking
+                ?? InvestmentTracking.auto.rawValue
             account.isArchived = dto.isArchived
             if let encoded = dto.iconBase64 {
                 account.iconData = Data(base64Encoded: encoded)
@@ -183,7 +192,8 @@ enum BackupService {
             targetNetWorth: file.settings.targetNetWorth,
             monthlyNetIncome: file.settings.monthlyNetIncome,
             maxMonthlyExpenses: file.settings.maxMonthlyExpenses,
-            projectionHorizonMonths: file.settings.projectionHorizonMonths))
+            projectionHorizonMonths: file.settings.projectionHorizonMonths,
+            investmentReturnTarget: file.settings.investmentReturnTarget ?? 0.03))
         try context.save()
     }
 }

@@ -22,12 +22,14 @@ enum SeedData {
                               categoryID: category("Savings")?.id, legacyKind: "savings",
                               colorHex: "#7A5EA6", sortOrder: 1,
                               includeInUsable: true, countsAsSavings: true,
-                              expectedAnnualReturn: 0.01, monthlyContribution: 150)
+                              expectedAnnualReturn: 0.01, monthlyContribution: 150,
+                              amountInvested: 750)
         let brokerage = Account(name: "Brokerage", note: "Long-term investing",
                           categoryID: category("Investment")?.id, legacyKind: "investment",
                           colorHex: "#C2703D", sortOrder: 2,
                           includeInUsable: true, countsAsSavings: true,
-                          expectedAnnualReturn: 0.06, monthlyContribution: 150)
+                          expectedAnnualReturn: 0.06, monthlyContribution: 150,
+                          amountInvested: 600)
         let mealCard = Account(name: "Meal Card",
                               note: "Food only — not spendable cash",
                               categoryID: category("Restricted")?.id, legacyKind: "restricted",
@@ -61,7 +63,8 @@ enum SeedData {
         }
 
         context.insert(AppSettings(targetNetWorth: 10_000, monthlyNetIncome: 2_000,
-                                   maxMonthlyExpenses: 500, projectionHorizonMonths: 60))
+                                   maxMonthlyExpenses: 500, projectionHorizonMonths: 60,
+                                   investmentReturnTarget: 0.03))
 
         // Commitments totalling 500 €/month, including a yearly bill so the
         // frequency normalisation is visible without editing anything.

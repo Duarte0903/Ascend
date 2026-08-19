@@ -1,21 +1,60 @@
 import SwiftUI
 
-/// Toolbar control for the time window. Shared across Dashboard, Balances and
-/// Trends via one stored preference, so switching screens keeps your context.
+/// The time window, as a custom segmented control. Shared across Dashboard,
+/// Balances and Trends via one stored preference, so switching screens keeps
+/// your context.
+///
+/// The stock `.segmented` picker is the one control in the app that ignores the
+/// design system — different corner radius, different type, its own greys. This
+/// matches the cards and fields, and slides the selection rather than jumping.
 struct DateRangePicker: View {
     @Binding var selection: DateRangeFilter
 
+    @Namespace private var selectionPill
+    @State private var hovered: DateRangeFilter?
+
     var body: some View {
-        Picker("Period", selection: $selection) {
+        HStack(spacing: 2) {
             ForEach(DateRangeFilter.allCases) { range in
-                Text(range.shortLabel).tag(range)
+                segment(range)
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .controlSize(.small)
-        .fixedSize()
+        .padding(3)
+        .background(Color.ftSurfaceAlt, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.ftHairline, lineWidth: 1))
         .help("Limit these screens to a time window")
+    }
+
+    private func segment(_ range: DateRangeFilter) -> some View {
+        let isSelected = range == selection
+        return Button {
+            withAnimation(.snappy(duration: 0.18)) { selection = range }
+        } label: {
+            Text(range.shortLabel)
+                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                .monospacedDigit()
+                .foregroundStyle(isSelected ? Color.white : Color.ftInkSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .frame(minWidth: 34)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color.ftAccent)
+                            .matchedGeometryEffect(id: "selected-range", in: selectionPill)
+                    } else if hovered == range {
+                        Capsule().fill(Color.ftInkTertiary.opacity(0.16))
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { hovered = range }
+            else if hovered == range { hovered = nil }
+        }
+        // The short label is all that fits; the tooltip says it in full.
+        .help(range.label)
     }
 }
 
@@ -43,12 +82,26 @@ struct AccountFilterMenu: View {
                 }
             }
         } label: {
-            Label(shownCount == accounts.count
-                  ? "All accounts"
-                  : "\(shownCount) of \(accounts.count)",
-                  systemImage: "line.3.horizontal.decrease.circle")
+            HStack(spacing: 5) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(shownCount == accounts.count
+                     ? "All accounts"
+                     : "\(shownCount) of \(accounts.count)")
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .foregroundStyle(shownCount == accounts.count
+                             ? Color.ftInkSecondary : Color.ftAccent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.ftSurfaceAlt, in: Capsule())
+            .overlay(Capsule().strokeBorder(shownCount == accounts.count
+                                            ? Color.ftHairline
+                                            : Color.ftAccent.opacity(0.5), lineWidth: 1))
+            .contentShape(Capsule())
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
         .fixedSize()
         .help("Choose which accounts appear in these charts")
     }

@@ -6,6 +6,16 @@ enum Money {
     static let dash = "—"
     private static let nnbsp = "\u{202F}"
 
+    static let defaultSymbol = "€"
+
+    /// The symbol every figure is drawn with. Set once when a profile opens,
+    /// on the main thread, and read everywhere after — which is why it is a
+    /// plain global rather than threaded through every call site.
+    nonisolated(unsafe) static var symbol = defaultSymbol
+
+    /// Offered as quick picks; any text is accepted.
+    static let commonSymbols = ["€", "$", "£", "CHF", "kr", "R$", "¥", "zł", "₹", "A$"]
+
     private static func formatter(decimals: Int) -> NumberFormatter {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -19,7 +29,7 @@ enum Money {
 
     static func currency(_ value: Double, decimals: Int = 0) -> String {
         let n = formatter(decimals: decimals).string(from: NSNumber(value: value)) ?? "0"
-        return "\(n)\(nnbsp)€"
+        return "\(n)\(nnbsp)\(symbol)"
     }
 
     static func currency(_ value: Double?, decimals: Int = 0) -> String {

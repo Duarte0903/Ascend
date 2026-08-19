@@ -13,6 +13,29 @@ struct AccountInfo: Identifiable, Hashable, Sendable {
     var expectedAnnualReturn: Double
     var monthlyContribution: Double
     var isLeftoverDestination: Bool
+    /// What has been put into this account, for measuring profit. Balances
+    /// alone cannot separate growth from deposits.
+    var amountInvested: Double
+    /// Whether this account shows on the Investments screen.
+    var investmentTracking: InvestmentTracking
+
+    init(id: UUID, name: String, colorHex: String, sortOrder: Int,
+         includeInUsable: Bool, countsAsSavings: Bool,
+         expectedAnnualReturn: Double, monthlyContribution: Double,
+         isLeftoverDestination: Bool, amountInvested: Double = 0,
+         investmentTracking: InvestmentTracking = .auto) {
+        self.id = id
+        self.name = name
+        self.colorHex = colorHex
+        self.sortOrder = sortOrder
+        self.includeInUsable = includeInUsable
+        self.countsAsSavings = countsAsSavings
+        self.expectedAnnualReturn = expectedAnnualReturn
+        self.monthlyContribution = monthlyContribution
+        self.isLeftoverDestination = isLeftoverDestination
+        self.amountInvested = amountInvested
+        self.investmentTracking = investmentTracking
+    }
 }
 
 struct RecordInput: Identifiable, Hashable, Sendable {
@@ -41,17 +64,21 @@ struct PortfolioInput: Sendable {
     var targetNetWorth: Double
     var monthlyNetIncome: Double
     var projectionHorizonMonths: Int
+    /// The combined return the tracked investments are aiming to beat.
+    var investmentReturnTarget: Double
 
     init(accounts: [AccountInfo], records: [RecordInput],
          expenses: [ExpenseInput] = [],
          targetNetWorth: Double, monthlyNetIncome: Double,
-         projectionHorizonMonths: Int) {
+         projectionHorizonMonths: Int,
+         investmentReturnTarget: Double = 0.03) {
         self.accounts = accounts
         self.records = records
         self.expenses = expenses
         self.targetNetWorth = targetNetWorth
         self.monthlyNetIncome = monthlyNetIncome
         self.projectionHorizonMonths = projectionHorizonMonths
+        self.investmentReturnTarget = investmentReturnTarget
     }
 
     /// Derived from the expense list, never typed — the Expenses screen is the

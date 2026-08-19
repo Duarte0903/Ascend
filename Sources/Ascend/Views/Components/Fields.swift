@@ -163,7 +163,10 @@ enum NumberText {
 /// Commits on Enter or focus loss, so a half-typed name is never validated.
 struct NameField: View {
     let name: String
-    var width: CGFloat = Theme.Size.name
+    /// A value pins the width; nil grows to fill whatever the row can spare.
+    var width: CGFloat? = Theme.Size.name
+    /// Below this it stops being usable, so a growing field never collapses.
+    var minimumWidth: CGFloat = 120
     var onCommit: (String) -> Void
 
     @FocusState private var focused: Bool
@@ -186,7 +189,9 @@ struct NameField: View {
             .focused($focused)
             .padding(.horizontal, Theme.Size.fieldPaddingH)
             .padding(.vertical, Theme.Size.fieldPaddingV)
-            .frame(width: width, alignment: .leading)
+            .frame(minWidth: width ?? minimumWidth,
+                   maxWidth: width ?? .infinity,
+                   alignment: .leading)
             .background(focused || hovering ? Color.ftSurfaceAlt : .clear, in: shape)
             .overlay(shape.strokeBorder(
                 focused ? Color.ftAccent : (hovering ? Color.ftHairlineStrong : .clear),
@@ -208,7 +213,10 @@ struct NameField: View {
 /// so a description never competes with the account's name or balance.
 struct DescriptionField: View {
     let note: String
-    var width: CGFloat = Theme.Size.description
+    /// nil grows to fill whatever the row can spare; a value pins it.
+    var width: CGFloat?
+    /// Below this it stops being a useful place to write a sentence.
+    var minimumWidth: CGFloat = 240
     var onCommit: (String) -> Void
 
     @FocusState private var focused: Bool
@@ -228,7 +236,11 @@ struct DescriptionField: View {
             .onSubmit { commitIfChanged() }
             .padding(.horizontal, Theme.Size.fieldPaddingH)
             .padding(.vertical, Theme.Size.fieldPaddingV)
-            .frame(width: width, alignment: .leading)
+            // Setting width makes min and max equal, which pins it; leaving
+            // it nil lets the field grow with the window.
+            .frame(minWidth: width ?? minimumWidth,
+                   maxWidth: width ?? .infinity,
+                   alignment: .leading)
             .background(focused || hovering ? Color.ftSurfaceAlt : .clear, in: shape)
             .overlay(shape.strokeBorder(
                 focused ? Color.ftAccent : (hovering ? Color.ftHairlineStrong : .clear),

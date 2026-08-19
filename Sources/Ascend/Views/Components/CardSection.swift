@@ -7,6 +7,19 @@ struct CardSection<Content: View>: View {
     var trailing: AnyView?
     @ViewBuilder var content: Content
 
+    private var stretchesVertically = false
+
+    /// Grows to whatever height the row offers, so cards sharing a row end up
+    /// the same height. Call it on the card itself rather than stretching it
+    /// from outside: the background sizes to what it is attached to, so an
+    /// outside `maxHeight` grows an invisible wrapper and centres the visible
+    /// card inside it, leaving the boxes different heights after all.
+    func fillingHeight() -> Self {
+        var copy = self
+        copy.stretchesVertically = true
+        return copy
+    }
+
     init(_ title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.subtitle = subtitle
@@ -44,7 +57,9 @@ struct CardSection<Content: View>: View {
             }
             content
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity,
+               maxHeight: stretchesVertically ? .infinity : nil,
+               alignment: .topLeading)
         .ftCard()
     }
 }

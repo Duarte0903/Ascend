@@ -46,10 +46,14 @@ struct AccountsView: View {
         .toolbar {
             Button("Account Types…", systemImage: "tag") { showingTypes = true }
                 .help("Create and edit the types accounts can have")
+                .popover(isPresented: $showingTypes, arrowEdge: .bottom) {
+                    typeManagerSheet
+                }
             Button("New Account", systemImage: "plus") { showingNewAccount = true }
         }
+        // New Account stays modal: it holds text you typed, and dismissing a
+        // half-filled form on a stray click would throw that away.
         .sheet(isPresented: $showingNewAccount) { newAccountSheet }
-        .sheet(isPresented: $showingTypes) { typeManagerSheet }
         .alert("Couldn't do that",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
@@ -83,16 +87,10 @@ struct AccountsView: View {
 
     private var typeManagerSheet: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Account Types").font(.system(size: 17, weight: .semibold))
-                Text("A type sets the defaults a new account starts with. Changing one never alters accounts that already exist.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color.ftInkTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+            DialogHeader(title: "Account Types",
+                         subtitle: "A type sets the defaults a new account starts with. Changing one never alters accounts that already exist.") {
+                showingTypes = false
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 14)
 
             typeTableHeader
 
@@ -302,16 +300,24 @@ struct AccountsView: View {
         let library = AccountService.iconLibrary(accounts: accounts)
         return VStack(alignment: .leading, spacing: 12) {
             if library.isEmpty {
-                Text("No images loaded yet")
-                    .font(.system(size: 12.5, weight: .semibold))
+                HStack(alignment: .top, spacing: 12) {
+                    Text("No images loaded yet")
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Spacer(minLength: 0)
+                    CloseButton { iconPickerFor = nil }
+                }
                 Text("Choose one and it will be offered here for your other accounts.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.ftInkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(width: 240, alignment: .leading)
             } else {
-                Text("Already loaded")
-                    .font(.system(size: 12.5, weight: .semibold))
+                HStack(alignment: .top, spacing: 12) {
+                    Text("Already loaded")
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Spacer(minLength: 0)
+                    CloseButton { iconPickerFor = nil }
+                }
                 Text("Accounts at the same bank can share one image.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.ftInkTertiary)
@@ -417,8 +423,7 @@ struct AccountsView: View {
                     try? context.save()
                 }
             }
-
-            Spacer(minLength: 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 1) {
                 Eyebrow("Current balance")
@@ -566,7 +571,11 @@ struct AccountsView: View {
 
     private var newAccountSheet: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("New Account").font(.system(size: 17, weight: .semibold))
+            HStack(alignment: .top, spacing: 12) {
+                Text("New Account").font(.system(size: 17, weight: .semibold))
+                Spacer(minLength: 0)
+                CloseButton { resetSheet() }
+            }
 
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 12) {
                 GridRow {
