@@ -4,6 +4,12 @@ import AppKit
 
 /// A type being filled in. It is not inserted until it has a name, so the
 /// list never shows a placeholder pretending to be a real type.
+/// A bank being filled in, before it exists.
+private struct DraftBank {
+    var name = ""
+    var colorHex: String
+}
+
 private struct DraftAccountType {
     var name = ""
     var includeInUsable = true
@@ -17,6 +23,7 @@ struct AccountsView: View {
     @Query private var records: [BalanceRecord]
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
     @Query(sort: \AccountCategory.sortOrder) private var categories: [AccountCategory]
+    @Query(sort: \Bank.sortOrder) private var banks: [Bank]
     /// Settings are edited on other screens now, so this view has to watch
     /// them: without a query on the object, a change elsewhere leaves these
     /// figures stale until the screen is left and re-entered.
@@ -46,6 +53,9 @@ struct AccountsView: View {
     @State private var showingTypes = false
     @State private var draftType: DraftAccountType?
     @FocusState private var draftTypeFocused: Bool
+    @State private var showingBanks = false
+    @State private var draftBank: DraftBank?
+    @FocusState private var draftBankFocused: Bool
     @State private var iconPickerFor: UUID?
 
     private var active: [Account] { accounts.filter { !$0.isArchived } }
@@ -69,6 +79,9 @@ struct AccountsView: View {
             if !archived.isEmpty { archivedCard }
         }
         .toolbar {
+            Button("Banks…", systemImage: "building.columns") { showingBanks = true }
+                .help("Create and edit the banks your accounts are held at")
+                .popover(isPresented: $showingBanks, arrowEdge: .bottom) { bankManager }
             Button("Account Types…", systemImage: "tag") { showingTypes = true }
                 .help("Create and edit the types accounts can have")
                 .popover(isPresented: $showingTypes, arrowEdge: .bottom) {
@@ -241,6 +254,142 @@ struct AccountsView: View {
         .controlSize(.small)
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
+    }
+
+    // MARK: - Banks
+
+    private var bankManager: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            DialogHeader(title: "Banks",
+                         subtitle: "Group accounts by where they are held. Allocation totals your money by bank. An account needn't have one.") {
+                showingBanks = false
+            }
+
+            Divider()
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    if banks.isEmpty && draftBank == nil {
+                        Text("No banks yet. Add one and you can assign accounts to it.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Color.ftInkTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(20)
+                    }
+                    ForEach(Array(banks.enumerated()), id: \.element.id) { index, bank in
+                        bankRow(bank)
+                        if index < banks.count - 1 || draftBank != nil {
+                            Divider().padding(.leading, 20)
+                        }
+                    }
+                    if draftBank != nil { draftBankRow }
+                }
+            }
+            .frame(height: 260)
+            .background(Color.ftSurface)
+
+            Divider()
+
+            HStack(spacing: 8) {
+                Button {
+                    draftBank = DraftBank(
+                        colorHex: Theme.accountPalette[banks.count % Theme.accountPalette.count])
+                } label: {
+                    Image(systemName: "plus").frame(width: Theme.Size.iconButton)
+                }
+                .buttonStyle(.borderless)
+                .help("Add a bank")
+
+                Text("Deleting a bank keeps its accounts — they simply stop being held anywhere.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+
+                Spacer()
+
+                Button("Done") { showingBanks = false }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: Theme.Size.sheetNarrow)
+        .background(Color.ftCanvas)
+    }
+
+    private func bankRow(_ bank: Bank) -> some View {
+        let held = BankService.accountsAt(bank, accounts: accounts)
+        return HStack(spacing: 12) {
+            ColorPicker("", selection: Binding(
+                get: { Color(hex: bank.colorHex) },
+                set: { bank.colorHex = $0.hexString; try? context.save() }))
+                .labelsHidden()
+
+            NameField(name: bank.name) { newValue in
+                do { try BankService.rename(bank, to: newValue, in: context) }
+                catch { errorMessage = error.localizedDescription }
+            }
+
+            Spacer(minLength: 8)
+
+            Text(held == 0 ? "unused" : "\(held) account\(held == 1 ? "" : "s")")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Color.ftInkTertiary)
+
+            Button {
+                BankService.delete(bank, accounts: accounts, in: context)
+            } label: {
+                Image(systemName: "trash").font(.system(size: 11))
+            }
+            .buttonStyle(.borderless)
+            .help(held > 0
+                  ? "Delete this bank — its \(held) account\(held == 1 ? "" : "s") stay, unbanked"
+                  : "Delete this bank")
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+    }
+
+    private var draftBankRow: some View {
+        HStack(spacing: 12) {
+            ColorPicker("", selection: Binding(
+                get: { Color(hex: draftBank?.colorHex ?? Theme.accountPalette[0]) },
+                set: { draftBank?.colorHex = $0.hexString }))
+                .labelsHidden()
+
+            TextField("Name", text: Binding(
+                get: { draftBank?.name ?? "" },
+                set: { draftBank?.name = $0 }))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: Theme.Size.name)
+                .focused($draftBankFocused)
+                .onSubmit(commitDraftBank)
+                .onAppear { draftBankFocused = true }
+
+            Spacer(minLength: 8)
+
+            Button("Add", action: commitDraftBank)
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .disabled((draftBank?.name ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+
+            Button("Cancel") { draftBank = nil }
+                .controlSize(.small)
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color.ftSurfaceAlt)
+    }
+
+    private func commitDraftBank() {
+        guard let draft = draftBank else { return }
+        do {
+            try BankService.create(name: draft.name, colorHex: draft.colorHex, in: context)
+            draftBank = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Opens a row to fill in rather than inserting a type called "New type".
@@ -490,6 +639,21 @@ struct AccountsView: View {
                         }
                         if account.categoryID == nil || category(for: account) == nil {
                             Text("No type").tag(Optional<UUID>.none)
+                        }
+                    }
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+
+                    Picker("", selection: Binding(
+                        get: { banks.contains { $0.id == account.bankID }
+                               ? account.bankID : nil },
+                        set: { account.bankID = $0; try? context.save() })) {
+                        // Optional by design, so "no bank" is a real choice
+                        // rather than the absence of one.
+                        Text("No bank").tag(Optional<UUID>.none)
+                        ForEach(banks) { bank in
+                            Text(bank.name).tag(Optional(bank.id))
                         }
                     }
                     .labelsHidden()

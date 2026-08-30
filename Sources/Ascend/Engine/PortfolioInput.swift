@@ -18,12 +18,15 @@ struct AccountInfo: Identifiable, Hashable, Sendable {
     var amountInvested: Double
     /// Whether this account shows on the Investments screen.
     var investmentTracking: InvestmentTracking
+    /// Which bank holds it, or nil when it is held nowhere in particular.
+    var bankID: UUID?
 
     init(id: UUID, name: String, colorHex: String, sortOrder: Int,
          includeInUsable: Bool, countsAsSavings: Bool,
          expectedAnnualReturn: Double, monthlyContribution: Double,
          isLeftoverDestination: Bool, amountInvested: Double = 0,
-         investmentTracking: InvestmentTracking = .auto) {
+         investmentTracking: InvestmentTracking = .auto,
+         bankID: UUID? = nil) {
         self.id = id
         self.name = name
         self.colorHex = colorHex
@@ -35,6 +38,7 @@ struct AccountInfo: Identifiable, Hashable, Sendable {
         self.isLeftoverDestination = isLeftoverDestination
         self.amountInvested = amountInvested
         self.investmentTracking = investmentTracking
+        self.bankID = bankID
     }
 }
 

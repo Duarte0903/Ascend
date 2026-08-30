@@ -5,7 +5,7 @@ import SwiftData
 
 @MainActor
 private func store(seeded: Bool = true) throws -> ModelContext {
-    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self,
+    let schema = Schema([Account.self, AccountCategory.self, Bank.self, BalanceRecord.self,
                          BalanceEntry.self, AppSettings.self, Expense.self,
                          ExpenseCategory.self])
     let context = ModelContext(try ModelContainer(

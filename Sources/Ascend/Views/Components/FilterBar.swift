@@ -1,65 +1,44 @@
 import SwiftUI
 
-/// The time window, as a custom segmented control. Shared across Dashboard,
-/// Balances and Trends via one stored preference, so switching screens keeps
-/// your context.
+/// The time window. Shared across Dashboard, Balances and Trends via one
+/// stored preference, so switching screens keeps your context.
 ///
-/// The stock `.segmented` picker is the one control in the app that ignores the
-/// design system — different corner radius, different type, its own greys. This
-/// matches the cards and fields, and slides the selection rather than jumping.
+/// Deliberately a stock picker with no styling of its own. It lives in the
+/// toolbar, which the system already renders in its own material — anything
+/// painted on top sits *over* that treatment rather than joining it.
 struct DateRangePicker: View {
     @Binding var selection: DateRangeFilter
-
-    @Namespace private var selectionPill
-    @State private var hovered: DateRangeFilter?
+    /// The years that actually appear in the records, newest first. Offering a
+    /// year with nothing in it would be a filter guaranteed to show nothing.
+    var years: [Int] = []
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(DateRangeFilter.allCases) { range in
-                segment(range)
+        Picker("Period", selection: $selection) {
+            ForEach(DateRangeFilter.standardCases) { range in
+                Text(range.label).tag(range)
+            }
+            if !years.isEmpty {
+                Divider()
+                ForEach(years, id: \.self) { year in
+                    // `verbatim` because a year is a label, not a quantity —
+                    // otherwise it comes out as "2 026".
+                    Text(verbatim: String(year)).tag(DateRangeFilter.year(year))
+                }
             }
         }
-        .padding(3)
-        .background(Color.ftSurfaceAlt, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.ftHairline, lineWidth: 1))
+        // A menu rather than a segmented control: the list grows by one every
+        // January, and a segmented control cannot grow.
+        .pickerStyle(.menu)
+        .labelsHidden()
+        .fixedSize()
         .help("Limit these screens to a time window")
-    }
-
-    private func segment(_ range: DateRangeFilter) -> some View {
-        let isSelected = range == selection
-        return Button {
-            withAnimation(.snappy(duration: 0.18)) { selection = range }
-        } label: {
-            Text(range.shortLabel)
-                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
-                .monospacedDigit()
-                .foregroundStyle(isSelected ? Color.white : Color.ftInkSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .frame(minWidth: 34)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(Color.ftAccent)
-                            .matchedGeometryEffect(id: "selected-range", in: selectionPill)
-                    } else if hovered == range {
-                        Capsule().fill(Color.ftInkTertiary.opacity(0.16))
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { inside in
-            if inside { hovered = range }
-            else if hovered == range { hovered = nil }
-        }
-        // The short label is all that fits; the tooltip says it in full.
-        .help(range.label)
     }
 }
 
 /// Which accounts to plot. Defaults to all, and an empty selection means all
 /// rather than an empty chart — a filter that can hide everything is a trap.
+///
+/// Unstyled for the same reason as the picker above: the toolbar dresses it.
 struct AccountFilterMenu: View {
     let accounts: [Account]
     @Binding var hidden: Set<UUID>
@@ -82,27 +61,11 @@ struct AccountFilterMenu: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 10, weight: .semibold))
-                Text(shownCount == accounts.count
-                     ? "All accounts"
-                     : "\(shownCount) of \(accounts.count)")
-                    .font(.system(size: 11.5, weight: .medium))
-            }
-            .foregroundStyle(shownCount == accounts.count
-                             ? Color.ftInkSecondary : Color.ftAccent)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.ftSurfaceAlt, in: Capsule())
-            .overlay(Capsule().strokeBorder(shownCount == accounts.count
-                                            ? Color.ftHairline
-                                            : Color.ftAccent.opacity(0.5), lineWidth: 1))
-            .contentShape(Capsule())
+            Label(shownCount == accounts.count
+                  ? "All accounts"
+                  : "\(shownCount) of \(accounts.count)",
+                  systemImage: "line.3.horizontal.decrease")
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .help("Choose which accounts appear in these charts")
     }
 

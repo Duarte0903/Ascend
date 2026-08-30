@@ -21,6 +21,9 @@ final class Account {
     var amountInvested: Double = 0
     /// Whether this account appears on the Investments screen.
     var investmentTrackingRaw: String = InvestmentTracking.auto.rawValue
+    /// Which bank holds this account, if any. Optional by design — a broker or
+    /// a meal card has no bank, and forcing one would invent a fact.
+    var bankID: UUID?
     var isLeftoverDestination: Bool = false
     var isArchived: Bool = false
     var archivedAt: Date?
@@ -66,6 +69,7 @@ final class Account {
                     monthlyContribution: monthlyContribution,
                     isLeftoverDestination: isLeftoverDestination,
                     amountInvested: amountInvested,
-                    investmentTracking: investmentTracking)
+                    investmentTracking: investmentTracking,
+                    bankID: bankID)
     }
 }

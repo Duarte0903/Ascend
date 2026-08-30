@@ -28,6 +28,11 @@ struct DashboardView: View {
         range.apply(to: allDerived, now: Date())
     }
 
+    /// Years with records in them, so the filter never offers an empty one.
+    private var availableYears: [Int] {
+        DateRangeFilter.years(in: allDerived.map(\.date))
+    }
+
     private var allDerived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
             accounts: accounts, records: records,
@@ -57,7 +62,8 @@ struct DashboardView: View {
         }
         .toolbar {
             DateRangePicker(selection: Binding(
-                get: { range }, set: { rangeRaw = $0.rawValue }))
+                get: { range }, set: { rangeRaw = $0.rawValue }),
+                            years: availableYears)
         }
     }
 

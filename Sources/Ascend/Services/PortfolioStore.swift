@@ -20,6 +20,11 @@ enum PortfolioStore {
             tax: settings.taxInput)
     }
 
+    /// The banks, in their own order, as the engine's value type.
+    static func banks(_ banks: [Bank]) -> [BankInfo] {
+        banks.sorted { $0.sortOrder < $1.sortOrder }.map { $0.toInfo() }
+    }
+
     /// Includes archived accounts, so historical totals stay intact after an
     /// account is archived.
     static func historicalInput(accounts: [Account],

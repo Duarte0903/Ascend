@@ -5,7 +5,7 @@ import SwiftData
 
 @MainActor
 private func store() throws -> ModelContext {
-    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self,
+    let schema = Schema([Account.self, AccountCategory.self, Bank.self, BalanceRecord.self,
                          BalanceEntry.self, AppSettings.self])
     let context = ModelContext(try ModelContainer(
         for: schema,
@@ -136,7 +136,7 @@ private func categories(_ context: ModelContext) throws -> [AccountCategory] {
 /// Accounts written before categories existed must land on the right type.
 @MainActor
 @Test func migrationAssignsTypesFromTheOldKindField() throws {
-    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self,
+    let schema = Schema([Account.self, AccountCategory.self, Bank.self, BalanceRecord.self,
                          BalanceEntry.self, AppSettings.self])
     let context = ModelContext(try ModelContainer(
         for: schema,
@@ -191,7 +191,7 @@ private func categories(_ context: ModelContext) throws -> [AccountCategory] {
         settings: SeedData.settings(in: source),
         categories: try source.fetch(FetchDescriptor<AccountCategory>()))
 
-    let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self,
+    let schema = Schema([Account.self, AccountCategory.self, Bank.self, BalanceRecord.self,
                          BalanceEntry.self, AppSettings.self])
     let target = ModelContext(try ModelContainer(
         for: schema,

@@ -42,7 +42,8 @@ final class ProfileStore {
     private let registryURL: URL
     private let profilesDirectory: URL
 
-    static let schema = Schema([Account.self, AccountCategory.self, BalanceRecord.self,
+    static let schema = Schema([Account.self, AccountCategory.self, Bank.self,
+                                BalanceRecord.self,
                                 BalanceEntry.self, AppSettings.self, Expense.self,
                                 ExpenseCategory.self])
 

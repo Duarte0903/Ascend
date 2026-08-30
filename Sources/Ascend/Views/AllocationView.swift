@@ -11,6 +11,7 @@ struct AllocationView: View {
     /// them: without a query on the object, a change elsewhere leaves these
     /// figures stale until the screen is left and re-entered.
     @Query private var storedSettings: [AppSettings]
+    @Query(sort: \Bank.sortOrder) private var banks: [Bank]
 
     private var settings: AppSettings {
         storedSettings.first ?? SeedData.settings(in: context)
@@ -28,7 +29,8 @@ struct AllocationView: View {
                                          settings: settings,
             expenses: expenseItems)
         return AllocationMetrics.compute(accounts: input.accounts,
-                                         records: LedgerEngine.derive(input))
+                                         records: LedgerEngine.derive(input),
+                                         banks: PortfolioStore.banks(banks))
     }
 
     var body: some View {
@@ -47,8 +49,73 @@ struct AllocationView: View {
                     breakdown.fillsHeight(minimum: 320)
                 }
                 .fillsHeight(minimum: 320)
+
+                // Only worth a card once there is something to group by. With
+                // no banks set up this is just the account list again.
+                if showsBanks { byBank }
             }
         }
+    }
+
+    /// A single row covering everything says nothing the total above it did
+    /// not already say.
+    private var showsBanks: Bool { allocation.byBank.count > 1 }
+
+    private var byBank: some View {
+        CardSection("By bank", subtitle: "Your money grouped by where it is held") {
+            VStack(spacing: 0) {
+                ForEach(Array(allocation.byBank.enumerated()), id: \.element.id) { index, bank in
+                    bankRow(bank)
+                    if index < allocation.byBank.count - 1 {
+                        Divider().opacity(0.6)
+                    }
+                }
+            }
+        }
+    }
+
+    private func bankRow(_ bank: BankSlice) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color(hex: bank.colorHex))
+                .frame(width: Theme.Size.dot, height: Theme.Size.dot)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(bank.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.ftInk)
+                Text(bank.accountCount == 1 ? "1 account" : "\(bank.accountCount) accounts")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.ftInkTertiary)
+            }
+
+            Spacer(minLength: 12)
+
+            // The bar makes the shares comparable at a glance; the figures
+            // alone would need reading against each other.
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.ftSurfaceAlt)
+                    Capsule()
+                        .fill(Color(hex: bank.colorHex))
+                        .frame(width: max(0, geo.size.width * bank.share))
+                }
+            }
+            .frame(width: 120, height: 6)
+
+            Text(Money.percent(bank.share))
+                .font(.system(size: 11.5))
+                .monospacedDigit()
+                .foregroundStyle(Color.ftInkTertiary)
+                .frame(width: Theme.Size.control, alignment: .trailing)
+
+            Text(Money.currency(bank.amount))
+                .font(.figure(14))
+                .monospacedDigit()
+                .foregroundStyle(Color.ftInk)
+                .frame(width: Theme.Size.field, alignment: .trailing)
+        }
+        .padding(.vertical, 9)
     }
 
     private var donut: some View {
