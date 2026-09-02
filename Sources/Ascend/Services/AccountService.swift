@@ -158,6 +158,84 @@ enum AccountService {
         try? context.save()
     }
 
+    /// Sets how often interest is credited, keeping the anchor date in step.
+    ///
+    /// The anchor is never shown or typed: choosing a frequency starts the
+    /// schedule from that moment, and every later payment is counted forward
+    /// from it. A frequency with no anchor cannot produce a schedule, and an
+    /// anchor with no frequency is never read, so neither exists alone.
+    static func setInterestSchedule(_ frequency: InterestFrequency,
+                                    on account: Account,
+                                    in context: ModelContext,
+                                    now: Date = Date(),
+                                    calendar: Calendar = Calendar(identifier: .gregorian)) {
+        // Stored in its simplest form, so one schedule has one spelling.
+        account.interestFrequency = InterestFrequency.normalised(frequency)
+        if account.interestFrequency.isScheduled {
+            if account.interestDate == nil {
+                // The next 1st. Never today: a schedule created today reading
+                // as "interest due today" is interest you have already had.
+                account.interestDate = nextOccurrence(ofDay: 1, after: now,
+                                                      calendar: calendar)
+            }
+        } else {
+            account.interestDate = nil
+        }
+        try? context.save()
+    }
+
+    /// Moves the schedule onto a different day of the month.
+    ///
+    /// The next payment is the next time that day comes round — not the same
+    /// day in whichever month the schedule happened to be created in. Ask for
+    /// the 15th on the 2nd and you get this month's 15th, not next month's.
+    static func setInterestDay(_ day: Int, on account: Account,
+                               in context: ModelContext,
+                               now: Date = Date(),
+                               calendar: Calendar = Calendar(identifier: .gregorian)) {
+        guard account.interestFrequency.isScheduled else { return }
+        account.interestDate = nextOccurrence(ofDay: day, after: now, calendar: calendar)
+        try? context.save()
+    }
+
+    /// The day of the month the schedule falls on.
+    static func interestDay(of account: Account,
+                            calendar: Calendar = Calendar(identifier: .gregorian)) -> Int {
+        guard let anchor = account.interestDate else { return 1 }
+        return calendar.component(.day, from: anchor)
+    }
+
+    /// The first date strictly after today that falls on `day`.
+    ///
+    /// Strictly after, so a payment is never dated the day it was set up; and
+    /// it looks at this month first, so the answer depends on the day chosen
+    /// rather than on when the schedule was created.
+    private static func nextOccurrence(ofDay day: Int, after now: Date,
+                                       calendar: Calendar) -> Date? {
+        let today = calendar.startOfDay(for: now)
+        guard var month = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: today)) else { return nil }
+        // At most two hops: this month, then the next, whose length differs.
+        for _ in 0..<2 {
+            let candidate = clamping(day: day, inMonthOf: month, calendar: calendar)
+            if candidate > today { return candidate }
+            guard let following = calendar.date(byAdding: .month, value: 1, to: month)
+            else { return nil }
+            month = following
+        }
+        return nil
+    }
+
+    /// The given day in the same month as `date`, clamped to that month's
+    /// length so the 31st still resolves in February.
+    private static func clamping(day: Int, inMonthOf date: Date,
+                                 calendar: Calendar) -> Date {
+        let length = calendar.range(of: .day, in: .month, for: date)?.count ?? 28
+        var parts = calendar.dateComponents([.year, .month], from: date)
+        parts.day = min(max(1, day), length)
+        return calendar.date(from: parts) ?? date
+    }
+
     /// Exactly one account can be the leftover destination. Pass nil to clear.
     static func setLeftoverDestination(_ account: Account?, accounts: [Account]) {
         for candidate in accounts {

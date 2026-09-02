@@ -20,13 +20,18 @@ struct AccountInfo: Identifiable, Hashable, Sendable {
     var investmentTracking: InvestmentTracking
     /// Which bank holds it, or nil when it is held nowhere in particular.
     var bankID: UUID?
+    /// A date a payment falls on, and how often payments recur.
+    var interestDate: Date?
+    var interestFrequency: InterestFrequency
 
     init(id: UUID, name: String, colorHex: String, sortOrder: Int,
          includeInUsable: Bool, countsAsSavings: Bool,
          expectedAnnualReturn: Double, monthlyContribution: Double,
          isLeftoverDestination: Bool, amountInvested: Double = 0,
          investmentTracking: InvestmentTracking = .auto,
-         bankID: UUID? = nil) {
+         bankID: UUID? = nil,
+         interestDate: Date? = nil,
+         interestFrequency: InterestFrequency = .none) {
         self.id = id
         self.name = name
         self.colorHex = colorHex
@@ -39,6 +44,8 @@ struct AccountInfo: Identifiable, Hashable, Sendable {
         self.amountInvested = amountInvested
         self.investmentTracking = investmentTracking
         self.bankID = bankID
+        self.interestDate = interestDate
+        self.interestFrequency = interestFrequency
     }
 }
 

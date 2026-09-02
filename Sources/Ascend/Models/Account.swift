@@ -24,6 +24,18 @@ final class Account {
     /// Which bank holds this account, if any. Optional by design — a broker or
     /// a meal card has no bank, and forcing one would invent a fact.
     var bankID: UUID?
+    /// A date a payment falls on, from which the schedule below runs. Not a
+    /// yearly anniversary — it is the anchor the frequency steps from.
+    var interestDate: Date?
+    /// How often interest is credited. `.none` means no schedule, and then the
+    /// anchor above is meaningless — the two are kept in step by
+    /// `AccountService.setInterestSchedule`.
+    var interestFrequencyRaw: String = InterestFrequency.none.rawValue
+
+    var interestFrequency: InterestFrequency {
+        get { InterestFrequency(rawValue: interestFrequencyRaw) ?? .none }
+        set { interestFrequencyRaw = newValue.rawValue }
+    }
     var isLeftoverDestination: Bool = false
     var isArchived: Bool = false
     var archivedAt: Date?
@@ -70,6 +82,8 @@ final class Account {
                     isLeftoverDestination: isLeftoverDestination,
                     amountInvested: amountInvested,
                     investmentTracking: investmentTracking,
-                    bankID: bankID)
+                    bankID: bankID,
+                    interestDate: interestDate,
+                    interestFrequency: interestFrequency)
     }
 }

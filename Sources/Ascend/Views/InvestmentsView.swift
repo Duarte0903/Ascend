@@ -16,6 +16,9 @@ struct InvestmentsView: View {
         storedSettings.first ?? SeedData.settings(in: context)
     }
     @State private var showingManager = false
+    /// Which account's interest schedule is open for editing, if any.
+    @State private var editingSchedule: UUID?
+    @State private var hoveredSchedule: UUID?
 
     private var derived: [DerivedRecord] {
         LedgerEngine.derive(PortfolioStore.input(
@@ -28,7 +31,8 @@ struct InvestmentsView: View {
                                          settings: settings, expenses: expenseItems)
         return InvestmentMetrics.compute(accounts: input.accounts,
                                          records: LedgerEngine.derive(input),
-                                         target: settings.investmentReturnTarget)
+                                         target: settings.investmentReturnTarget,
+                                         interestTaxRate: settings.investmentTaxRate)
     }
 
     private var trackedAccounts: [Account] {
@@ -60,6 +64,7 @@ struct InvestmentsView: View {
             } else {
                 hero
                 holdingsTable
+                if !metrics.holdings.isEmpty { forecastTable }
                 if derived.count > 1 { valueChart.fillsHeight(minimum: 260) }
                 else { Spacer(minLength: 0) }
             }
@@ -278,6 +283,358 @@ struct InvestmentsView: View {
     }
 
     // MARK: - Holdings
+
+    /// What each holding is expected to become, account by account. Separate
+    /// from Holdings above deliberately: that table is recorded history, this
+    /// one is entirely assumption, and mixing the two invites reading a guess
+    /// as a fact.
+    private var forecastTable: some View {
+        CardSection("Projected value",
+                    subtitle: "Counted forward from today, after tax. Money you pay in is shown, but never counted as earned.") {
+            HStack(spacing: 6) {
+                Text("Tax on interest")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+                MoneyField(value: Binding(
+                    get: { settings.investmentTaxRate * 100 },
+                    set: {
+                        settings.investmentTaxRate = min(max(0, $0), 100) / 100
+                        try? context.save()
+                    }),
+                    decimals: 2, width: Theme.Size.fieldSmall, suffix: "%")
+            }
+            .help("Charged on interest as it is credited. Gains taxed only when you sell are left alone — that bill depends on when you sell, not on the year passing.")
+        } content: {
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 0) {
+                GridRow {
+                    Text("Account").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Return").frame(width: Theme.Size.fieldSmall, alignment: .trailing)
+                    Text("Interest").frame(width: Theme.Size.picker, alignment: .leading)
+                    Text("Next payment").frame(width: Theme.Size.name, alignment: .trailing)
+                    horizonHeader("Value in 1 year", months: 12)
+                    horizonHeader("Value in 5 years", months: 60)
+                }
+                .font(.tableHeader)
+                .tracking(Theme.tableHeaderTracking)
+                .foregroundStyle(Color.ftInkSecondary)
+                .padding(.bottom, 8)
+
+                Divider()
+
+                ForEach(metrics.holdings) { holding in
+                    GridRow {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(Color(hex: holding.colorHex))
+                                .frame(width: Theme.Size.dot, height: Theme.Size.dot)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(holding.name).font(.system(size: 13))
+                                // Named next to the account, because it is what
+                                // makes two accounts on the same rate project so
+                                // differently — and it is set on another screen.
+                                if holding.monthlyContribution > 0 {
+                                    Text("\(Money.currency(holding.monthlyContribution))/mo in")
+                                        .font(.system(size: 10.5))
+                                        .monospacedDigit()
+                                        .foregroundStyle(Color.ftInkTertiary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .help(holding.monthlyContribution > 0
+                              ? "Set on the Accounts screen. It is money you add, not return — the projections separate the two."
+                              : "Nothing is paid into this account, so its projection is growth alone.")
+
+                        returnField(holding)
+                            .frame(width: Theme.Size.fieldSmall, alignment: .trailing)
+
+                        frequencyPicker(holding)
+                            .frame(width: Theme.Size.picker, alignment: .leading)
+
+                        nextPaymentCell(holding)
+                            .frame(width: Theme.Size.name, alignment: .trailing)
+
+                        projectionCell(holding, months: 12)
+                        projectionCell(holding, months: 60, emphasised: true)
+                    }
+                    .padding(.vertical, 9)
+
+                    if holding.id != metrics.holdings.last?.id {
+                        Divider().opacity(0.6)
+                    }
+                }
+
+                Divider()
+
+                GridRow {
+                    Text("Total").font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("").frame(width: Theme.Size.fieldSmall)
+                    Text("").frame(width: Theme.Size.picker)
+                    Text("").frame(width: Theme.Size.name)
+                    totalCell(months: 12)
+                    totalCell(months: 60)
+                }
+
+            }
+        }
+    }
+
+    /// Says what the column is and when it lands.
+    ///
+    /// "1 year" alone reads as "by the end of this year", which in September is
+    /// four months away, not twelve — so the date it actually reaches is part
+    /// of the heading rather than something to work out.
+    private func horizonHeader(_ title: String, months: Int) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text(title)
+            Text(horizonDate(months: months))
+                .textCase(nil)
+                .foregroundStyle(Color.ftInkTertiary)
+        }
+        .frame(width: Theme.Size.field, alignment: .trailing)
+    }
+
+    /// Says what is in the figure: the horizon, what you pay in, and whether
+    /// tax has been taken — which depends on how the account is taxed.
+    private func projectionHelp(_ holding: InvestmentHolding, months: Int) -> String {
+        var parts = ["Over \(months) months, to \(horizonDate(months: months))."]
+        if holding.contributions(overMonths: months) > 0 {
+            parts.append("Includes \(Money.currency(holding.contributions(overMonths: months))) you would pay in.")
+        }
+        parts.append(holding.appliedTaxRate > 0
+                     ? "Net of \(Money.percent(holding.appliedTaxRate)) tax on interest."
+                     : "Untaxed here — gains on this account are taxed when you sell.")
+        return parts.joined(separator: " ")
+    }
+
+    private func horizonDate(months: Int) -> String {
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(byAdding: .month, value: months, to: Date()) ?? Date()
+        return date.formatted(.dateTime.month(.abbreviated).year())
+    }
+
+    /// The projected value, with what it actually earns underneath.
+    ///
+    /// Without the second line an account you pay into looks like it earns more
+    /// than one you don't: most of the figure is your own money arriving, and
+    /// two accounts on the same rate read as wildly different.
+    private func projectionCell(_ holding: InvestmentHolding, months: Int,
+                                emphasised: Bool = false) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            // Profit leads: it is the figure that makes two accounts on the
+            // same rate comparable. The value it grows into is the supporting
+            // detail, not the headline.
+            Text(Money.currency(holding.growth(overMonths: months), decimals: 2))
+                .font(.figure(13, weight: emphasised ? .medium : .regular))
+                .monospacedDigit()
+                .foregroundStyle(holding.growth(overMonths: months) > 0
+                                 ? Color.ftPositive : Color.ftInkSecondary)
+            Text("worth \(Money.currency(holding.projectedValue(months: months)))")
+                .font(.system(size: 10))
+                .monospacedDigit()
+                .foregroundStyle(Color.ftInkTertiary)
+        }
+        .frame(width: Theme.Size.field, alignment: .trailing)
+        .help(projectionHelp(holding, months: months))
+    }
+
+    /// The stored account behind a holding, so the assumptions can be edited
+    /// where their effect is visible.
+    private func account(for holding: InvestmentHolding) -> Account? {
+        accounts.first { $0.id == holding.accountID }
+    }
+
+    private func returnField(_ holding: InvestmentHolding) -> some View {
+        Group {
+            if let account = account(for: holding) {
+                MoneyField(value: Binding(
+                    get: { account.expectedAnnualReturn * 100 },
+                    set: { account.expectedAnnualReturn = $0 / 100; try? context.save() }),
+                    decimals: 2, width: Theme.Size.fieldSmall, suffix: "%")
+            }
+        }
+    }
+
+    private func frequencyPicker(_ holding: InvestmentHolding) -> some View {
+        Group {
+            if let account = account(for: holding) {
+                // Boxed like the fields beside it: the card promises that
+                // boxed cells are yours to set, and a bare label with a chevron
+                // reads as a caption rather than a control.
+                let shape = RoundedRectangle(cornerRadius: Theme.fieldRadius,
+                                             style: .continuous)
+                let open = editingSchedule == account.id
+                let hovering = hoveredSchedule == account.id
+                Button {
+                    editingSchedule = account.id
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(account.interestFrequency.isScheduled
+                             ? account.interestFrequency.label
+                             : "Not scheduled")
+                            .font(.system(size: 12))
+                            .foregroundStyle(account.interestFrequency.isScheduled
+                                             ? Color.ftInk : Color.ftInkTertiary)
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(Color.ftInkTertiary)
+                    }
+                    .padding(.horizontal, Theme.Size.fieldPaddingH)
+                    .padding(.vertical, Theme.Size.fieldPaddingV)
+                    .background(Color.ftSurface, in: shape)
+                    .overlay(shape.strokeBorder(
+                        open ? Color.ftAccent
+                             : (hovering ? Color.ftInkTertiary : Color.ftHairlineStrong),
+                        lineWidth: open ? 1.5 : 1))
+                    .contentShape(shape)
+                }
+                .buttonStyle(.plain)
+                .onHover { inside in
+                    if inside { hoveredSchedule = account.id }
+                    else if hoveredSchedule == account.id { hoveredSchedule = nil }
+                }
+                .animation(.easeOut(duration: 0.13), value: hovering)
+                .help("Set how often interest is credited")
+                .popover(isPresented: Binding(
+                    get: { editingSchedule == account.id },
+                    set: { if !$0 && editingSchedule == account.id { editingSchedule = nil } }),
+                         arrowEdge: .bottom) {
+                    scheduleEditor(account, holding: holding)
+                }
+            }
+        }
+    }
+
+    /// The three settings that make a schedule, laid out with room to breathe
+    /// rather than stacked into a table cell.
+    private func scheduleEditor(_ account: Account,
+                                holding: InvestmentHolding) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Interest schedule")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(account.name)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.ftInkTertiary)
+            }
+
+            Picker("How often", selection: Binding(
+                get: { account.interestFrequency },
+                set: { AccountService.setInterestSchedule($0, on: account, in: context) })) {
+                ForEach(InterestFrequency.presets) { Text($0.label).tag($0) }
+                Divider()
+                Text("Another interval…").tag(customTag(for: account))
+            }
+            .controlSize(.small)
+
+            if account.interestFrequency.isCustom {
+                HStack(spacing: 6) {
+                    Text("Every").font(.system(size: 12))
+                    IntField(value: Binding(
+                        get: { account.interestFrequency.monthsBetween ?? 2 },
+                        set: {
+                            AccountService.setInterestSchedule(.everyMonths($0),
+                                                               on: account, in: context)
+                        }),
+                        range: InterestFrequency.customRange, width: Theme.Size.fieldSmall)
+                    Text("months").font(.system(size: 12))
+                }
+            }
+
+            if account.interestFrequency.isScheduled {
+                HStack(spacing: 6) {
+                    Text("On day").font(.system(size: 12))
+                    IntField(value: Binding(
+                        get: { AccountService.interestDay(of: account) },
+                        set: { AccountService.setInterestDay($0, on: account, in: context) }),
+                        range: 1...31, width: Theme.Size.fieldSmall)
+                    Text("of the month").font(.system(size: 12))
+                }
+
+                Divider()
+
+                // The consequence, right where it is being set.
+                if let next = holding.nextInterest(after: Date()) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Next payment \(next.formatted(.dateTime.day().month(.abbreviated).year()))")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Color.ftInkSecondary)
+                        if let amount = holding.netInterestPerPayment {
+                            Text("\(Money.currency(amount, decimals: 2)) a payment, after tax")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.ftInkTertiary)
+                        }
+                    }
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Done") { editingSchedule = nil }
+                    .keyboardShortcut(.defaultAction)
+                    .controlSize(.small)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(16)
+        .frame(width: 268)
+    }
+
+    /// The tag behind the custom entry: the account's own interval when it has
+    /// a custom one, and a sensible starting point otherwise.
+    private func customTag(for account: Account) -> InterestFrequency {
+        account.interestFrequency.isCustom ? account.interestFrequency : .everyMonths(2)
+    }
+
+    /// When the next payment falls, and what it is worth. Both are worked out
+    /// from the frequency — there is nothing to type, and a date you could edit
+    /// would be a second way of saying what the frequency already says.
+    private func nextPaymentCell(_ holding: InvestmentHolding) -> some View {
+        Group {
+            if holding.interestFrequency.isScheduled,
+               let next = holding.nextInterest(after: Date()) {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(next.formatted(.dateTime.day().month(.abbreviated).year()))
+                        .font(.system(size: 12.5))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.ftInk)
+                    if let amount = holding.netInterestPerPayment {
+                        Text(Money.currency(amount, decimals: 2))
+                            .font(.system(size: 10.5))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.ftInkTertiary)
+                    }
+                }
+                .help("Counted forward from when you set the schedule.")
+            } else {
+                Text(Money.dash)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.ftInkTertiary)
+            }
+        }
+    }
+
+    private func projectedTotal(months: Int) -> Double {
+        metrics.holdings.reduce(0) { $0 + $1.projectedValue(months: months) }
+    }
+
+    private func totalGrowth(months: Int) -> Double {
+        metrics.holdings.reduce(0) { $0 + $1.growth(overMonths: months) }
+    }
+
+    private func totalCell(months: Int) -> some View {
+        VStack(alignment: .trailing, spacing: 1) {
+            Text(Money.currency(totalGrowth(months: months), decimals: 2))
+                .font(.figure(13, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(Color.ftPositive)
+            Text("worth \(Money.currency(projectedTotal(months: months)))")
+                .font(.system(size: 10)).monospacedDigit()
+                .foregroundStyle(Color.ftInkTertiary)
+        }
+        .frame(width: Theme.Size.field, alignment: .trailing)
+    }
 
     private var holdingsTable: some View {
         CardSection("Holdings",

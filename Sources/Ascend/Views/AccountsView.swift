@@ -735,16 +735,6 @@ struct AccountsView: View {
                                 .gridColumnAlignment(.trailing)
                         }
                     }
-                    GridRow {
-                        Text("Expected annual return")
-                            .font(.system(size: 12.5))
-                            .foregroundStyle(Color.ftInkSecondary)
-                        MoneyField(value: Binding(
-                            get: { account.expectedAnnualReturn * 100 },
-                            set: { account.expectedAnnualReturn = $0 / 100; try? context.save() }),
-                            decimals: 2, width: Theme.Size.field, suffix: "%")
-                            .gridColumnAlignment(.trailing)
-                    }
                 }
             }
         }

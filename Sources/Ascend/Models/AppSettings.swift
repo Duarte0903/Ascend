@@ -9,6 +9,10 @@ final class AppSettings {
     var projectionHorizonMonths: Int = 60
     /// The combined return the investments are aiming to beat, as a fraction.
     var investmentReturnTarget: Double = 0.03
+    /// What interest is taxed at when it is credited. Applied to accounts that
+    /// pay on a schedule; gains only taxed on sale are left alone, since the
+    /// bill depends on when you sell rather than on the year passing.
+    var investmentTaxRate: Double = 0.28
 
     // MARK: - Tax
 
