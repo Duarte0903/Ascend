@@ -156,6 +156,7 @@ struct BalancesView: View {
                     set: { record.date = $0; try? context.save() }),
                     displayedComponents: .date)
                     .labelsHidden()
+                        .environment(\.locale, Dates.pickerLocale)
                     .datePickerStyle(.field)
                     .frame(width: Theme.Size.field)
 

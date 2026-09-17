@@ -247,6 +247,7 @@ struct ProfileView: View {
                         }),
                                displayedComponents: .date)
                         .labelsHidden()
+                        .environment(\.locale, Dates.pickerLocale)
                     if let caption = active.ageCaption() {
                         Text(caption)
                             .font(.system(size: 11))
@@ -351,7 +352,7 @@ struct ProfileView: View {
     }
 
     private static func shortDate(_ date: Date) -> String {
-        date.formatted(.dateTime.day().month(.abbreviated).year())
+        Dates.short(date)
     }
 
     // MARK: - Shared field shapes

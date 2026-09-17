@@ -558,7 +558,7 @@ struct InvestmentsView: View {
                 // The consequence, right where it is being set.
                 if let next = holding.nextInterest(after: Date()) {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("Next payment \(next.formatted(.dateTime.day().month(.abbreviated).year()))")
+                        Text("Next payment \(Dates.short(next))")
                             .font(.system(size: 11.5))
                             .foregroundStyle(Color.ftInkSecondary)
                         if let amount = holding.netInterestPerPayment {
@@ -596,7 +596,7 @@ struct InvestmentsView: View {
             if holding.interestFrequency.isScheduled,
                let next = holding.nextInterest(after: Date()) {
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(next.formatted(.dateTime.day().month(.abbreviated).year()))
+                    Text(Dates.short(next))
                         .font(.system(size: 12.5))
                         .monospacedDigit()
                         .foregroundStyle(Color.ftInk)

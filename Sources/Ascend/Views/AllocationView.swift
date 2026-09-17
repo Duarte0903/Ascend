@@ -155,7 +155,7 @@ struct AllocationView: View {
     }
 
     private var latestCaption: String? {
-        latestDate.map { "Most recent record, \($0.formatted(.dateTime.day().month(.wide).year()))" }
+        latestDate.map { "Most recent record, \(Dates.short($0))" }
     }
 
     private var breakdown: some View {

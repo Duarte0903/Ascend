@@ -82,7 +82,7 @@ struct DashboardView: View {
                     DeltaPill.amount(metrics.latestChangePercent,
                                      formatted: Money.percent(metrics.latestChangePercent))
                     if let date = derived.dropLast().last?.date {
-                        Text("since \(date.formatted(.dateTime.day().month(.abbreviated)))")
+                        Text("since \(Dates.dayMonth(date))")
                             .font(.system(size: 12.5))
                             .foregroundStyle(Color.ftInkTertiary)
                     }
@@ -157,7 +157,7 @@ struct DashboardView: View {
     private var bestMonthCaption: String? {
         guard let best = derived.filter({ $0.changeAmount != nil })
             .max(by: { ($0.changeAmount ?? 0) < ($1.changeAmount ?? 0) }) else { return nil }
-        return best.date.formatted(.dateTime.day().month(.wide))
+        return Dates.short(best.date)
     }
 
     private var changeCountCaption: String? {
@@ -167,7 +167,7 @@ struct DashboardView: View {
 
     private var rangeCaption: String? {
         guard let first = derived.first?.date, let last = derived.last?.date else { return nil }
-        return "\(first.formatted(.dateTime.day().month(.abbreviated))) – \(last.formatted(.dateTime.day().month(.abbreviated).year()))"
+        return "\(Dates.dayMonth(first)) – \(Dates.short(last))"
     }
 
     private func signed(_ value: Double?) -> String {

@@ -12,26 +12,51 @@ struct DateRangePicker: View {
     /// year with nothing in it would be a filter guaranteed to show nothing.
     var years: [Int] = []
 
+    private var selectedYear: Int? {
+        if case .year(let year) = selection { return year }
+        return nil
+    }
+
     var body: some View {
+        // The fixed windows stay a segmented control — the stock one, so the
+        // toolbar dresses it. Years live in a separate menu because that list
+        // grows by one every January and a segmented control cannot.
         Picker("Period", selection: $selection) {
             ForEach(DateRangeFilter.standardCases) { range in
-                Text(range.label).tag(range)
-            }
-            if !years.isEmpty {
-                Divider()
-                ForEach(years, id: \.self) { year in
-                    // `verbatim` because a year is a label, not a quantity —
-                    // otherwise it comes out as "2 026".
-                    Text(verbatim: String(year)).tag(DateRangeFilter.year(year))
-                }
+                Text(range.shortLabel).tag(range)
             }
         }
-        // A menu rather than a segmented control: the list grows by one every
-        // January, and a segmented control cannot grow.
-        .pickerStyle(.menu)
+        .pickerStyle(.segmented)
         .labelsHidden()
-        .fixedSize()
         .help("Limit these screens to a time window")
+
+        if !years.isEmpty {
+            Menu {
+                ForEach(years, id: \.self) { year in
+                    Button {
+                        selection = .year(year)
+                    } label: {
+                        HStack {
+                            // `verbatim`: a year is a label, not a quantity,
+                            // or it comes out as "2 026".
+                            Text(verbatim: String(year))
+                            if selectedYear == year { Image(systemName: "checkmark") }
+                        }
+                    }
+                }
+                if selectedYear != nil {
+                    Divider()
+                    Button("All time") { selection = .all }
+                }
+            } label: {
+                if let year = selectedYear {
+                    Label(String(year), systemImage: "calendar")
+                } else {
+                    Label("Year", systemImage: "calendar")
+                }
+            }
+            .help("Show one year's records")
+        }
     }
 }
 

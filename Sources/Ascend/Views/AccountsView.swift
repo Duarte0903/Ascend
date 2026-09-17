@@ -804,7 +804,7 @@ struct AccountsView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Color.ftInkSecondary)
                         if let date = account.archivedAt {
-                            Text("archived \(date.formatted(.dateTime.day().month(.abbreviated).year()))")
+                            Text("archived \(Dates.short(date))")
                                 .font(.system(size: 11.5))
                                 .foregroundStyle(Color.ftInkTertiary)
                         }
