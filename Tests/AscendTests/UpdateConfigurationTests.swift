@@ -48,3 +48,20 @@ struct UpdateConfigurationTests {
         #expect(!marketing.isEmpty)
     }
 }
+
+@Suite("Dev mode")
+struct DevModeTests {
+    @Test("A Debug build honours ASCEND_DEV=1 and nothing else")
+    func flag() {
+        #expect(DevMode.isActive(in: ["ASCEND_DEV": "1"]))
+        #expect(!DevMode.isActive(in: ["ASCEND_DEV": "0"]))
+        #expect(!DevMode.isActive(in: ["ASCEND_DEV": "yes"]))
+        #expect(!DevMode.isActive(in: [:]))
+    }
+
+    @Test("The test process itself is not in dev mode")
+    func testsAreNotDev() {
+        #expect(!DevMode.isActive)
+        #expect(DevMode.dataRoot == nil)
+    }
+}

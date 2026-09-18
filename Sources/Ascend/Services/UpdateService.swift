@@ -29,21 +29,25 @@ final class UpdateService: NSObject {
 
     // Sparkle's controller is not Sendable and must outlive the app; kept
     // private so nothing else reaches into the updater directly.
+    // nil when updates are off (the dev preview): no feed is ever fetched
+    // and the menu item stays disabled.
     @ObservationIgnored
-    private var controller: SPUStandardUpdaterController!
+    private var controller: SPUStandardUpdaterController?
     @ObservationIgnored
     private var observation: NSKeyValueObservation?
     @ObservationIgnored
     private var schedule: Task<Void, Never>?
 
-    override init() {
+    init(enabled: Bool = true) {
         super.init()
+        guard enabled else { return }
         // Sparkle's own scheduled check is off (SUEnableAutomaticChecks); the
-        // quiet probe below replaces it so the result lands in the sidebar
+        // quiet probe below replaces it so the result lands in the toast
         // instead of an unprompted window.
-        controller = SPUStandardUpdaterController(startingUpdater: true,
-                                                  updaterDelegate: self,
-                                                  userDriverDelegate: nil)
+        let controller = SPUStandardUpdaterController(startingUpdater: true,
+                                                      updaterDelegate: self,
+                                                      userDriverDelegate: nil)
+        self.controller = controller
         observation = controller.updater.observe(\.canCheckForUpdates,
                                                  options: [.initial, .new]) { [weak self] _, change in
             let value = change.newValue ?? false
@@ -61,7 +65,7 @@ final class UpdateService: NSObject {
     /// A user-initiated check: always ends in a window, either the update
     /// offer or "You're up to date" / a connection error.
     func checkForUpdates() {
-        controller.checkForUpdates(nil)
+        controller?.checkForUpdates(nil)
     }
 
     /// Hides the card until the next quiet check finds something.
@@ -72,8 +76,8 @@ final class UpdateService: NSObject {
     /// Fetches the feed without any UI; the answer arrives through the
     /// delegate. Sparkle ignores versions the user has skipped.
     private func probe() {
-        guard controller.updater.canCheckForUpdates else { return }
-        controller.updater.checkForUpdateInformation()
+        guard let updater = controller?.updater, updater.canCheckForUpdates else { return }
+        updater.checkForUpdateInformation()
     }
 }
 

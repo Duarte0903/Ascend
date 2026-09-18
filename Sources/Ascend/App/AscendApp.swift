@@ -7,11 +7,12 @@ import UniformTypeIdentifiers
 struct AscendApp: App {
     /// Owns both the profile list and the open profile's store. Seeding and
     /// migration moved in here, because they now happen per profile.
-    @State private var profiles = ProfileStore()
+    @State private var profiles = ProfileStore(root: DevMode.dataRoot,
+                                               seedsSample: DevMode.isActive)
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
     /// Started once at launch; Sparkle schedules its own daily check from
     /// here and puts up its own windows.
-    @State private var updates = UpdateService()
+    @State private var updates = UpdateService(enabled: !DevMode.isActive)
 
     var body: some Scene {
         WindowGroup {

@@ -123,6 +123,36 @@ Builds, ad-hoc signs, and copies the app to `/Applications/Ascend.app`. Ad-hoc s
 do not expire and a locally built app carries no quarantine flag, so it just opens — no
 Apple Developer account needed, ever.
 
+Build without installing, run the tests, or regenerate the icon:
+
+```bash
+./scripts/build.sh
+./scripts/test.sh
+swift scripts/make-icon.swift
+```
+
+`Ascend.xcodeproj` is generated from `project.yml` and deliberately not committed.
+
+### Development preview
+
+```bash
+./scripts/dev.sh
+```
+
+Builds a Debug copy and runs it **beside** the installed release, so you can try a change
+with real windows without disturbing the app you actually use. The preview:
+
+- keeps its own profiles in `~/Library/Application Support/Ascend Dev/` (seeded with the
+  sample data the first time — **File ▸ Import Backup…** an export from the release if
+  you want your own numbers);
+- never checks for updates, so it cannot be replaced by a release under you;
+- wears a red **DEV** badge beside the net worth in the sidebar.
+
+Running the script again rebuilds and relaunches the preview only. The badge and the
+separate data root are switched on by `ASCEND_DEV=1`, which only a Debug build reads —
+a release binary compiles that check away, so no environment variable can put the badge
+on the real app.
+
 ### Updates
 
 On launch — and once a day while it stays open — Ascend quietly checks the repo for a
@@ -131,6 +161,12 @@ opens Sparkle's window, where **Install Update** is the only thing that download
 replaces anything. **Ascend ▸ Check for Updates…** does the same on demand. Updates are
 verified against an Ed25519 signature, so a zip that isn't the one produced by the
 release script is refused.
+
+Installing from a [release](https://github.com/Duarte0903/Ascend/releases) zip rather than
+from source works the same way afterwards, with one first-launch wrinkle: a downloaded app
+carries a quarantine flag and Ascend is not notarised, so macOS will refuse it once. Go to
+**System Settings ▸ Privacy & Security** and click **Open Anyway**. Updates installed by
+Sparkle clear the flag themselves, so that happens only the first time.
 
 ### Cutting a release
 
@@ -145,21 +181,16 @@ things it does not do — create the GitHub Release with the zip attached, commi
 `appcast.xml` from `main` and must not learn about a zip before it exists. The first
 run generates the signing key and stops so its public half can go into `project.yml`.
 
-Build without installing, run the tests, or regenerate the icon:
-
-```bash
-./scripts/build.sh
-./scripts/test.sh
-swift scripts/make-icon.swift
-```
-
-`Ascend.xcodeproj` is generated from `project.yml` and deliberately not committed.
+The signing key lives only in your login Keychain, as "Private key for signing Sparkle
+updates". Back it up: without it, installed copies can never accept another update.
 
 ## Data and backups
 
-Data lives in a local SwiftData store on your Mac. **File → Export Backup…** (⇧⌘E) writes a
-JSON file carrying accounts, types, records and settings; **File → Import Backup…**
-replaces the store from one.
+Data lives in local SwiftData stores on your Mac, one per profile, under
+`~/Library/Application Support/Ascend/Profiles/` (the development preview uses
+`Ascend Dev/` beside it). **File → Export Backup…** (⇧⌘E) writes a JSON file carrying the
+open profile's accounts, types, records and settings; **File → Import Backup…** replaces
+that profile's store from one.
 
 On first launch the app seeds itself with the four accounts and five records carried over
 from the original spreadsheet, plus its goal and projection assumptions, so no screen starts

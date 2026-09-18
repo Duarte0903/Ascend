@@ -95,13 +95,17 @@ struct RootView: View {
                 }
         }
         .safeAreaInset(edge: .bottom) {
-            VStack(alignment: .leading, spacing: 1) {
-                Eyebrow("Net worth")
-                Text(Money.currency(netWorth))
-                    .font(.figure(18))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.ftInk)
-                    .contentTransition(.numericText())
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Eyebrow("Net worth")
+                    Text(Money.currency(netWorth))
+                        .font(.figure(18))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.ftInk)
+                        .contentTransition(.numericText())
+                }
+                Spacer(minLength: 8)
+                if DevMode.isActive { DevBadge() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)

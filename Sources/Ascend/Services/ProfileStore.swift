@@ -47,9 +47,10 @@ final class ProfileStore {
                                 BalanceEntry.self, AppSettings.self, Expense.self,
                                 ExpenseCategory.self])
 
-    /// `root` exists for tests: pass a temporary directory and the store keeps
-    /// entirely to itself, adopting no legacy store and seeding no sample data.
-    init(root: URL? = nil) {
+    /// `root` exists for tests and the dev preview: pass a directory and the
+    /// store keeps entirely to itself, adopting no legacy store. Tests also
+    /// get no sample data; the preview asks for it with `seedsSample`.
+    init(root: URL? = nil, seedsSample: Bool = false) {
         let isolated = root != nil
         let fileManager = FileManager.default
         let support = (try? fileManager.url(for: .applicationSupportDirectory,
@@ -82,7 +83,7 @@ final class ProfileStore {
             // Sample data belongs only to a first profile created out of
             // nothing. An empty profile the user asked for must stay empty,
             // which is why seeding does not live in `prepare`.
-            seedFirstProfile = !adopted && !isolated
+            seedFirstProfile = !adopted && (!isolated || seedsSample)
             Self.write(loaded, to: registryFile)
         }
 
