@@ -48,6 +48,10 @@ struct AllocationMetrics: Sendable {
             return AllocationMetrics(slices: [], byBank: [], total: 0, usable: 0)
         }
         let sorted = accounts.sorted { $0.sortOrder < $1.sortOrder }
+        // Largest first: this screen answers "where is most of my money", and
+        // the answer should be the first row, not somewhere down a list in
+        // the order the accounts happened to be created. Ties keep the
+        // accounts' own order, so equal balances do not reshuffle on refresh.
         let slices = sorted.map { account in
             let amount = latest.amount(for: account.id)
             return AllocationSlice(
@@ -55,6 +59,7 @@ struct AllocationMetrics: Sendable {
                 amount: amount,
                 share: latest.total == 0 ? 0 : amount / latest.total)
         }
+        .sorted { $0.amount > $1.amount }
         return AllocationMetrics(slices: slices,
                                  byBank: bankSlices(accounts: sorted, latest: latest,
                                                     banks: banks),

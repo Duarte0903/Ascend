@@ -188,3 +188,49 @@ struct BankServiceTests {
         #expect(BankService.accountsAt(bank, accounts: [live, old]) == 1)
     }
 }
+
+@Suite("Allocation order")
+struct AllocationOrderTests {
+
+    private func account(_ name: String, order: Int) -> AccountInfo {
+        AccountInfo(id: UUID(), name: name, colorHex: "#1F6E8C", sortOrder: order,
+                    includeInUsable: true, countsAsSavings: false,
+                    expectedAnnualReturn: 0, monthlyContribution: 0,
+                    isLeftoverDestination: false)
+    }
+
+    private func slices(_ accounts: [AccountInfo], amounts: [Double]) -> [AllocationSlice] {
+        let balances = Dictionary(uniqueKeysWithValues: zip(accounts.map(\.id), amounts))
+        let input = PortfolioInput(
+            accounts: accounts,
+            records: [RecordInput(id: UUID(), date: Date(), createdAt: Date(),
+                                  balances: balances)],
+            targetNetWorth: 0, monthlyNetIncome: 0, projectionHorizonMonths: 1)
+        return AllocationMetrics.compute(accounts: accounts,
+                                         records: LedgerEngine.derive(input)).slices
+    }
+
+    @Test("The largest balance comes first, whatever order the accounts were made in")
+    func largestFirst() {
+        let accounts = [account("Small", order: 0), account("Big", order: 1),
+                        account("Middle", order: 2)]
+        let result = slices(accounts, amounts: [100, 5_000, 900])
+        #expect(result.map(\.name) == ["Big", "Middle", "Small"])
+    }
+
+    @Test("Equal balances keep the accounts' own order rather than reshuffling")
+    func tiesAreStable() {
+        let accounts = [account("First", order: 0), account("Second", order: 1),
+                        account("Third", order: 2)]
+        let result = slices(accounts, amounts: [500, 500, 500])
+        #expect(result.map(\.name) == ["First", "Second", "Third"])
+    }
+
+    @Test("An empty account sinks to the bottom rather than vanishing")
+    func emptyAccountIsLast() {
+        let accounts = [account("Empty", order: 0), account("Funded", order: 1)]
+        let result = slices(accounts, amounts: [0, 250])
+        #expect(result.map(\.name) == ["Funded", "Empty"])
+        #expect(result.count == 2)
+    }
+}
