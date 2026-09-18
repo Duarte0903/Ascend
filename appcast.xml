@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Ascend</title>
+    <link>https://github.com/Duarte0903/Ascend</link>
+    <description>Ascend releases</description>
+    <item>
+      <title>1.1</title>
+      <pubDate>Fri, 18 Sep 2026 19:54:52 +0000</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[Ascend now checks for updates on launch and installs them when you say so.]]></description>
+      <enclosure url="https://github.com/Duarte0903/Ascend/releases/download/v1.1/Ascend-1.1.zip"
+                 length="5518098"
+                 type="application/octet-stream"
+                 sparkle:edSignature="ePDqixR5/3uiSMGwAgI6TWFkTUWTEEOYiyF/Q1jBWosGydCHmP3kzIB+t/qfa7Y0GD0SGO2NrL9PVrp21tStDQ=="/>
+    </item>
+  </channel>
+</rss>

@@ -9,6 +9,9 @@ struct AscendApp: App {
     /// migration moved in here, because they now happen per profile.
     @State private var profiles = ProfileStore()
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
+    /// Started once at launch; Sparkle schedules its own daily check from
+    /// here and puts up its own windows.
+    @State private var updates = UpdateService()
 
     var body: some Scene {
         WindowGroup {
@@ -22,9 +25,15 @@ struct AscendApp: App {
                 // switching profiles left every screen querying the old store.
                 .modelContainer(profiles.container)
                 .environment(profiles)
+                .environment(updates)
         }
         .defaultSize(width: 1180, height: 800)
         .commands {
+            // Ascend ▸ Check for Updates…, right under About.
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                    .disabled(!updates.canCheckForUpdates)
+            }
             CommandGroup(after: .newItem) {
                 Menu("Switch Profile") {
                     ForEach(profiles.registry.profiles) { profile in

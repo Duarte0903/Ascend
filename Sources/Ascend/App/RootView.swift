@@ -8,6 +8,7 @@ struct RootView: View {
     @Query(sort: \Expense.sortOrder) private var expenseItems: [Expense]
 
     @Environment(ProfileStore.self) private var profiles
+    @Environment(UpdateService.self) private var updates
     @State private var selection: AppSection = .dashboard
     @State private var showingNewProfile = false
     @State private var showingProfileManager = false
@@ -33,6 +34,18 @@ struct RootView: View {
         } detail: {
             detail
         }
+        // Drops in at the top centre of the window, only after a quiet
+        // check has found a newer release.
+        .overlay(alignment: .top) {
+            if let update = updates.availableUpdate {
+                UpdateCard(update: update,
+                           install: { updates.checkForUpdates() },
+                           dismiss: { updates.dismissAvailableUpdate() })
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: updates.availableUpdate)
         .sheet(isPresented: $showingNewProfile) {
             NewProfileSheet(isPresented: $showingNewProfile)
         }
@@ -96,6 +109,7 @@ struct RootView: View {
             .background(.bar)
             .overlay(Divider(), alignment: .top)
         }
+
         .onAppear { appearance.wrappedValue.apply() }
         .onChange(of: profileKind) { _, kind in
             if !selection.isAvailable(to: kind) { selection = .dashboard }

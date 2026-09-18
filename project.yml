@@ -4,11 +4,15 @@ options:
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1"
+    CURRENT_PROJECT_VERSION: "2"
     CODE_SIGN_IDENTITY: "-"
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGNING_ALLOWED: "NO"
@@ -19,13 +23,20 @@ targets:
     platform: macOS
     sources:
       - path: Sources/Ascend
+    dependencies:
+      - package: Sparkle
     info:
       path: Sources/Ascend/Resources/Info.plist
       properties:
         CFBundleName: Ascend
         CFBundleDisplayName: Ascend
         CFBundleIdentifier: com.duarte.ascend
-        CFBundleShortVersionString: "1.0"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        SUFeedURL: https://raw.githubusercontent.com/Duarte0903/Ascend/main/appcast.xml
+        SUPublicEDKey: "oYCqYq78WJZgFLfeKTr5P4mEMbvTlqGU/NywiYQKJ/w="
+        SUEnableAutomaticChecks: false
+        SUAutomaticallyUpdate: false
         CFBundleIconFile: AppIcon
         LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.finance

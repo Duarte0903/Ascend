@@ -123,6 +123,28 @@ Builds, ad-hoc signs, and copies the app to `/Applications/Ascend.app`. Ad-hoc s
 do not expire and a locally built app carries no quarantine flag, so it just opens — no
 Apple Developer account needed, ever.
 
+### Updates
+
+On launch — and once a day while it stays open — Ascend quietly checks the repo for a
+newer release. If there is one, a toast drops in at the top of the window; **Update…**
+opens Sparkle's window, where **Install Update** is the only thing that downloads or
+replaces anything. **Ascend ▸ Check for Updates…** does the same on demand. Updates are
+verified against an Ed25519 signature, so a zip that isn't the one produced by the
+release script is refused.
+
+### Cutting a release
+
+```bash
+./scripts/release.sh 1.2 -m "What changed"
+```
+
+That bumps the version in `project.yml`, builds, zips, signs the zip with the key in
+your login Keychain, and adds the entry to `appcast.xml`. It then prints the three
+things it does not do — create the GitHub Release with the zip attached, commit
+`project.yml` and `appcast.xml`, push — in that order, because installed copies read
+`appcast.xml` from `main` and must not learn about a zip before it exists. The first
+run generates the signing key and stops so its public half can go into `project.yml`.
+
 Build without installing, run the tests, or regenerate the icon:
 
 ```bash
