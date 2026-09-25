@@ -324,6 +324,17 @@ struct TaxInput: Sendable, Equatable {
     /// anything. Off by default: a meal card buys food and nothing else, so
     /// treating it as free cash overstates what is actually available.
     var mealAllowanceSpendable: Bool
+    /// A part of the year's pay that carries no tax and no contributions —
+    /// expenses reimbursed by the employer. Given as a yearly total, because
+    /// it does not arrive on a schedule the way the meal allowance does.
+    ///
+    /// It sits inside `grossAnnual`: the employer pays it as part of the same
+    /// package, so it is lifted out before anything is charged rather than
+    /// added on top.
+    var exemptExpenses: Double
+    /// Whether that money is the taxpayer's to spend. Off by default: money
+    /// for company expenses leaves again.
+    var exemptExpensesSpendable: Bool
     var table: TaxYear
 
     init(grossAnnual: Double,
@@ -336,6 +347,8 @@ struct TaxInput: Sendable, Equatable {
          mealAllowanceDaysPerYear: Double = 0,
          mealAllowanceOnCard: Bool = true,
          mealAllowanceSpendable: Bool = false,
+         exemptExpenses: Double = 0,
+         exemptExpensesSpendable: Bool = false,
          withholdingAtSource: Bool = true,
          withholdingRate: Double = 0,
          table: TaxYear = .portugalDefaults) {
@@ -349,6 +362,8 @@ struct TaxInput: Sendable, Equatable {
         self.mealAllowanceDaysPerYear = mealAllowanceDaysPerYear
         self.mealAllowanceOnCard = mealAllowanceOnCard
         self.mealAllowanceSpendable = mealAllowanceSpendable
+        self.exemptExpenses = exemptExpenses
+        self.exemptExpensesSpendable = exemptExpensesSpendable
         self.withholdingAtSource = withholdingAtSource
         self.withholdingRate = withholdingRate
         self.table = table
@@ -380,6 +395,9 @@ struct TaxAssessment: Sendable, Equatable {
     var mealAllowanceTaxable: Double
     var socialSecurity: Double
     var exemptIncome: Double
+    /// The reimbursed expenses inside the gross, which nothing is charged on.
+    /// Counted in `totalGrossAnnual`, absent from `taxableIncome`.
+    var exemptExpenses: Double
     var specificDeduction: Double
     var taxableIncome: Double
     var slices: [BracketSlice]
@@ -409,8 +427,9 @@ struct TaxAssessment: Sendable, Equatable {
     /// two places cannot quote the same thing on different bases.
     var budgetAnnualIncome: Double
     var budgetMonthlyIncome: Double
-    /// Net less the meal allowance, which is the figure a budget should use
-    /// when the allowance lands on a card that only buys food.
+    /// Net less anything earmarked — the meal allowance on a card that only
+    /// buys food, and expenses that leave again — which is the figure a
+    /// budget should use.
     var spendableNetAnnual: Double
     var spendableNetMonthly: Double
     /// Everything taken, over everything received. Social security counts: it
@@ -434,10 +453,16 @@ enum TaxEngine {
         let table = input.table
         let salary = max(0, input.grossAnnual)
         let meal = mealAllowance(input)
+        // Reimbursed expenses are part of the salary the employer pays but
+        // carry no tax and no contributions, so they come out before anything
+        // is charged. Never more than the salary itself.
+        let expenses = min(max(0, input.exemptExpenses), salary)
+        let taxableSalary = salary - expenses
 
         // Only the part of the allowance above the daily limit is income; the
-        // rest is invisible to both social security and IRS.
-        let employmentIncome = salary + meal.taxable
+        // rest is invisible to both social security and IRS — as are the
+        // expenses.
+        let employmentIncome = taxableSalary + meal.taxable
 
         let socialSecurity = employmentIncome * table.socialSecurityRate
         let exempt = youngExemption(gross: employmentIncome, input: input)
@@ -466,7 +491,11 @@ enum TaxEngine {
         let net = salary + meal.gross - socialSecurity - due
         let received = salary + meal.gross
         let payments = max(1, table.paymentsPerYear)
-        let spendable = input.mealAllowanceSpendable ? net : net - meal.gross
+        // Whatever cannot be spent freely comes off the net, each part on its
+        // own switch.
+        let earmarked = (input.mealAllowanceSpendable ? 0 : meal.gross)
+            + (input.exemptExpensesSpendable ? 0 : expenses)
+        let spendable = net - earmarked
 
         // Withholding runs on the same income IRS does — the exempt part of
         // the allowance is invisible to it too.
@@ -481,8 +510,7 @@ enum TaxEngine {
             withheld = rate > 0 ? employmentIncome * rate : due
         }
         let takeHome = salary + meal.gross - socialSecurity - withheld
-        let spendableTakeHome = input.mealAllowanceSpendable
-            ? takeHome : takeHome - meal.gross
+        let spendableTakeHome = takeHome - earmarked
 
         return TaxAssessment(
             grossAnnual: salary,
@@ -492,6 +520,7 @@ enum TaxEngine {
             mealAllowanceTaxable: meal.taxable,
             socialSecurity: socialSecurity,
             exemptIncome: exempt,
+            exemptExpenses: expenses,
             specificDeduction: specific,
             taxableIncome: taxable,
             // Reported undivided, so the breakdown adds up to the tax charged.

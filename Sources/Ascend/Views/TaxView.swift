@@ -42,6 +42,9 @@ struct TaxView: View {
                                         Double(settings.mealAllowanceDaysPerYear),
                                      mealAllowanceOnCard: settings.mealAllowanceOnCard,
                                      mealAllowanceSpendable: settings.mealAllowanceSpendable,
+                                     exemptExpenses: settings.taxExemptExpenses,
+                                     exemptExpensesSpendable:
+                                        settings.taxExemptExpensesSpendable,
                                      withholdingAtSource: settings.taxWithholdingAtSource,
                                      withholdingRate: settings.taxWithholdingRate,
                                      table: table))
@@ -121,6 +124,32 @@ struct TaxView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Color.ftInkTertiary)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Divider()
+                row("Untaxed a year") {
+                    VStack(alignment: .leading, spacing: 3) {
+                        MoneyField(value: Binding(
+                            get: { settings.taxExemptExpenses },
+                            set: { settings.taxExemptExpenses = max(0, $0); save() }),
+                                   decimals: 2, width: Theme.Size.picker, suffix: Money.symbol)
+                        Text(exemptExpensesCaption)
+                            .font(.system(size: 11))
+                            .foregroundStyle(exemptExpensesOverruns
+                                             ? Color.ftNegative : Color.ftInkTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                // No divider: the switch belongs to the amount above it, and
+                // is only worth asking once there is something to spend.
+                if settings.taxExemptExpenses > 0 {
+                    row("Untaxed is spendable") {
+                        Toggle("", isOn: Binding(
+                            get: { settings.taxExemptExpensesSpendable },
+                            set: { settings.taxExemptExpensesSpendable = $0; save() }))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
                     }
                 }
                 Divider()
@@ -397,7 +426,30 @@ struct TaxView: View {
         guard entered > 0 else { return "Food allowance included." }
         let meal = settings.mealAllowanceAnnual
         guard meal > 0 else { return "No food allowance set, so all of it is salary." }
-        return "\(Money.currency(meal)) allowance, \(Money.currency(settings.salaryExcludingMealAllowance)) salary."
+        let salary = settings.salaryExcludingMealAllowance
+        let expenses = min(max(0, settings.taxExemptExpenses), salary)
+        guard expenses > 0 else {
+            return "\(Money.currency(meal)) allowance, \(Money.currency(salary)) salary."
+        }
+        return "\(Money.currency(meal)) allowance, \(Money.currency(expenses)) untaxed, \(Money.currency(salary - expenses)) taxed salary."
+    }
+
+    /// Says what the figure is for and, when it is impossible, why.
+    private var exemptExpensesCaption: String {
+        guard settings.taxExemptExpenses > 0 else {
+            return "Expenses paid with your salary that carry no tax."
+        }
+        if exemptExpensesOverruns {
+            return "More than the salary itself — only \(Money.currency(settings.salaryExcludingMealAllowance)) can be untaxed."
+        }
+        let monthly = Money.currency(settings.taxExemptExpenses / 12)
+        return "\(monthly) a month on average, inside gross pay. No tax, no social security."
+    }
+
+    /// Nothing above the salary can be exempt, and the engine clamps it; the
+    /// caption says so rather than letting the figures quietly disagree.
+    private var exemptExpensesOverruns: Bool {
+        settings.taxExemptExpenses > settings.salaryExcludingMealAllowance
     }
 
     /// The index sets two things, and it is the only figure behind either.
@@ -456,12 +508,21 @@ struct TaxView: View {
     private var spendableCaption: String {
         let basis = settings.taxWithholdingAtSource
             ? "After tax and social security" : "Tax not yet taken"
-        guard assessment.mealAllowanceGross > 0 else {
-            return "\(basis), the year over twelve"
+        guard !heldBack.isEmpty else { return "\(basis), the year over twelve" }
+        return "\(basis), without \(heldBack.joined(separator: " or "))"
+    }
+
+    /// What is paid but cannot be spent, named so one caption covers any
+    /// combination of the two switches.
+    private var heldBack: [String] {
+        var parts: [String] = []
+        if !settings.mealAllowanceSpendable, assessment.mealAllowanceGross > 0 {
+            parts.append("the food allowance")
         }
-        return settings.mealAllowanceSpendable
-            ? "\(basis), food allowance included"
-            : "\(basis), without the food allowance"
+        if !settings.taxExemptExpensesSpendable, assessment.exemptExpenses > 0 {
+            parts.append("expenses")
+        }
+        return parts
     }
 
     /// Names the disclosure after what it holds, and says when something is
@@ -614,11 +675,11 @@ struct TaxView: View {
                 Divider()
                 amountRow("Per salary payment", assessment.netPerPayment,
                           detail: "\(table.paymentsPerYear) a year")
-                if assessment.mealAllowanceGross > 0 {
+                if assessment.mealAllowanceGross > 0 || assessment.exemptExpenses > 0 {
                     Divider()
                     amountRow("Spendable for the year", assessment.budgetAnnualIncome,
-                              detail: settings.mealAllowanceSpendable
-                                  ? "allowance included" : "allowance excluded",
+                              detail: heldBack.isEmpty
+                                  ? "all of it" : "less \(heldBack.joined(separator: " and "))",
                               emphasised: true)
                 }
             }
@@ -791,6 +852,13 @@ struct TaxView: View {
             slices.append(GrossSlice(name: "Meal card",
                                      amount: assessment.mealAllowanceGross,
                                      color: .ftAccent))
+        }
+        // Same rule as the meal card: its own wedge only when it is held
+        // back, since spendable it is already inside take-home.
+        if !settings.taxExemptExpensesSpendable, assessment.exemptExpenses > 0 {
+            slices.append(GrossSlice(name: "Untaxed",
+                                     amount: assessment.exemptExpenses,
+                                     color: Color(hex: "#5B6C9B")))
         }
         if assessment.socialSecurity > 0 {
             slices.append(GrossSlice(name: "Social security",

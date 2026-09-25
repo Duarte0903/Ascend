@@ -67,6 +67,13 @@ final class AppSettings {
     var mealAllowanceOnCard: Bool = true
     /// Off by default: a meal card buys food and nothing else.
     var mealAllowanceSpendable: Bool = false
+    /// The part of the year's pay that carries no tax and no contributions:
+    /// expenses the employer reimburses. A yearly total, because it does not
+    /// arrive on a schedule. Inside `grossAnnualIncome`, not on top of it.
+    var taxExemptExpenses: Double = 0
+    /// Whether that money is yours to spend, or leaves again on the expenses
+    /// it was paid for.
+    var taxExemptExpensesSpendable: Bool = false
     /// Whether IRS is withheld monthly before the money arrives.
     var taxWithholdingAtSource: Bool = true
     /// The rate from the payslip, when known. 0 means it is not.
@@ -173,6 +180,8 @@ final class AppSettings {
                         mealAllowanceDaysPerYear: Double(mealAllowanceDaysPerYear),
                         mealAllowanceOnCard: mealAllowanceOnCard,
                         mealAllowanceSpendable: mealAllowanceSpendable,
+                        exemptExpenses: taxExemptExpenses,
+                        exemptExpensesSpendable: taxExemptExpensesSpendable,
                         withholdingAtSource: taxWithholdingAtSource,
                         withholdingRate: taxWithholdingRate,
                         table: taxTable)

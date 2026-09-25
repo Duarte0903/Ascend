@@ -1668,3 +1668,139 @@ struct LeftoverContributionDerivedTests {
         #expect(result.leftoverDestinationContribution == 0)
     }
 }
+
+@Suite("Untaxed expenses")
+struct ExemptExpensesTests {
+    /// The figures the app is configured with, so the suite tests the real
+    /// shape: salary with a meal allowance on a card.
+    private func input(expenses: Double, spendable: Bool = false) -> TaxInput {
+        TaxInput(grossAnnual: 17_000,
+                 mealAllowancePerDay: 10.20,
+                 mealAllowanceDaysPerYear: 220,
+                 mealAllowanceOnCard: true,
+                 exemptExpenses: expenses,
+                 exemptExpensesSpendable: spendable,
+                 withholdingAtSource: true)
+    }
+
+    @Test("Nothing entered leaves the assessment exactly as it was")
+    func zeroChangesNothing() {
+        #expect(TaxEngine.assess(input(expenses: 0)) == TaxEngine.assess(
+            TaxInput(grossAnnual: 17_000,
+                     mealAllowancePerDay: 10.20,
+                     mealAllowanceDaysPerYear: 220,
+                     mealAllowanceOnCard: true,
+                     withholdingAtSource: true)))
+    }
+
+    @Test("Untaxed expenses carry neither IRS nor social security")
+    func nothingIsCharged() {
+        let plain = TaxEngine.assess(input(expenses: 0))
+        let with = TaxEngine.assess(input(expenses: 4_200))
+
+        #expect(with.taxableIncome < plain.taxableIncome)
+        #expect(with.taxDue < plain.taxDue)
+        // Social security is charged on the salary less the exempt part.
+        #expect(with.socialSecurity == (17_000 - 4_200 + with.mealAllowanceTaxable) * 0.11)
+        #expect(with.exemptExpenses == 4_200)
+    }
+
+    @Test("What the employer pays does not change, so the rate falls instead")
+    func totalHolds() {
+        let plain = TaxEngine.assess(input(expenses: 0))
+        let with = TaxEngine.assess(input(expenses: 4_200))
+
+        #expect(with.totalGrossAnnual == plain.totalGrossAnnual)
+        #expect(with.grossAnnual == plain.grossAnnual)
+        #expect(with.effectiveRate < plain.effectiveRate)
+        // More reaches you, because less was taken from the same gross.
+        #expect(with.netAnnual > plain.netAnnual)
+    }
+
+    @Test("Held back, it stays out of every spendable figure")
+    func notSpendable() {
+        let held = TaxEngine.assess(input(expenses: 4_200))
+        let mine = TaxEngine.assess(input(expenses: 4_200, spendable: true))
+
+        #expect(mine.spendableNetAnnual - held.spendableNetAnnual == 4_200)
+        #expect(mine.budgetAnnualIncome - held.budgetAnnualIncome == 4_200)
+        // Only the spendable figures move: the assessment itself is the same.
+        #expect(mine.taxDue == held.taxDue)
+        #expect(mine.netAnnual == held.netAnnual)
+        #expect(mine.budgetMonthlyIncome == mine.budgetAnnualIncome / 12)
+    }
+
+    @Test("More than the salary is clamped to the salary")
+    func clamped() {
+        let over = TaxEngine.assess(input(expenses: 90_000))
+
+        #expect(over.exemptExpenses == 17_000)
+        #expect(over.taxDue == 0)
+        // Only the taxable part of the allowance is left to charge.
+        #expect(over.socialSecurity == over.mealAllowanceTaxable * 0.11)
+        #expect(over.totalGrossAnnual == TaxEngine.assess(input(expenses: 0)).totalGrossAnnual)
+    }
+
+    @Test("A negative amount is ignored rather than adding income")
+    func negativeIgnored() {
+        #expect(TaxEngine.assess(input(expenses: -500)) == TaxEngine.assess(input(expenses: 0)))
+    }
+
+    @Test("The two held-back parts come off together, each on its own switch")
+    func bothHeldBack() {
+        var both = input(expenses: 4_200)
+        both.mealAllowanceSpendable = false
+        let assessment = TaxEngine.assess(both)
+
+        #expect(assessment.spendableNetAnnual
+                == assessment.netAnnual - assessment.mealAllowanceGross - 4_200)
+
+        var allMine = both
+        allMine.mealAllowanceSpendable = true
+        allMine.exemptExpensesSpendable = true
+        #expect(TaxEngine.assess(allMine).spendableNetAnnual == assessment.netAnnual)
+    }
+}
+
+/// The configured situation, checked against figures worked out by hand: a
+/// salary with the allowance at exactly the card limit, IRS Jovem in its
+/// first year, and expenses reimbursed inside the pay.
+@Suite("Untaxed expenses, in the round")
+struct ExemptExpensesScenarioTests {
+    private func assess(expenses: Double, spendable: Bool = false) -> TaxAssessment {
+        TaxEngine.assess(TaxInput(grossAnnual: 26_000 - 10.46 * 264,
+                                  youngTaxpayerYear: 1,
+                                  mealAllowancePerDay: 10.46,
+                                  mealAllowanceDaysPerYear: 264,
+                                  mealAllowanceOnCard: true,
+                                  exemptExpenses: expenses,
+                                  exemptExpensesSpendable: spendable,
+                                  withholdingAtSource: true))
+    }
+
+    @Test("With IRS Jovem already covering the tax, the saving is social security")
+    func savingIsContributions() {
+        let plain = assess(expenses: 0)
+        let with = assess(expenses: 4_200)
+
+        #expect(plain.taxDue == 0)
+        #expect(with.taxDue == 0)
+        #expect(abs(plain.socialSecurity - 2_556.24) < 0.01)
+        #expect(abs(with.socialSecurity - 2_094.24) < 0.01)
+        // 11% of the 4 200 that is no longer contributory.
+        #expect(abs((plain.socialSecurity - with.socialSecurity) - 462) < 0.01)
+    }
+
+    @Test("Held back it lowers the monthly budget; spendable it raises it")
+    func monthlyBudget() {
+        #expect(abs(assess(expenses: 0).budgetMonthlyIncome - 1_723.53) < 0.01)
+        #expect(abs(assess(expenses: 4_200).budgetMonthlyIncome - 1_412.03) < 0.01)
+        #expect(abs(assess(expenses: 4_200, spendable: true).budgetMonthlyIncome - 1_762.03) < 0.01)
+    }
+
+    @Test("The allowance at exactly the card limit is wholly exempt")
+    func allowanceAtTheLimit() {
+        #expect(assess(expenses: 4_200).mealAllowanceTaxable == 0)
+        #expect(abs(assess(expenses: 4_200).mealAllowanceGross - 2_761.44) < 0.01)
+    }
+}
