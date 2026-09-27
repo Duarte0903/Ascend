@@ -5,6 +5,18 @@
     <link>https://github.com/Duarte0903/Ascend</link>
     <description>Ascend releases</description>
     <item>
+      <title>1.2</title>
+      <pubDate>Sun, 27 Sep 2026 16:40:39 +0000</pubDate>
+      <sparkle:version>3</sparkle:version>
+      <sparkle:shortVersionString>1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[Tax screen reworked: figures reconcile to the cent against a payslip, holiday and Christmas pay are entered separately, and Projections budget on an ordinary month. Tax is now offered only to a person in Portugal. New scripts/dev.sh runs a development preview beside the installed app.]]></description>
+      <enclosure url="https://github.com/Duarte0903/Ascend/releases/download/v1.2/Ascend-1.2.zip"
+                 length="5605662"
+                 type="application/octet-stream"
+                 sparkle:edSignature="TrTL+b9LRLTPoYiqOBB9nWs4LvBGsmBulxO1AF0KS2lo7Y4APnHkH1aMUU5+96HZisygntjKV9MRWiFP+ZCHCA=="/>
+    </item>
+    <item>
       <title>1.1</title>
       <pubDate>Fri, 18 Sep 2026 19:54:52 +0000</pubDate>
       <sparkle:version>2</sparkle:version>
