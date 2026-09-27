@@ -196,6 +196,27 @@ struct ProfileView: View {
                         profiles.update(active.id) { $0.location = value }
                     }
                 }
+                row("Country") {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Picker("", selection: Binding(
+                            get: { active.countryCode },
+                            set: { code in
+                                profiles.update(active.id) { $0.countryCode = code }
+                            })) {
+                            ForEach(Countries.all, id: \.self) { code in
+                                Text(Countries.name(for: code)).tag(code)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: Theme.Size.picker)
+                        if active.kind == .person {
+                            Text(countryCaption)
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color.ftInkTertiary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
                 Divider()
                 row(active.kind.inceptionLabel) { inceptionControl }
             }
@@ -234,6 +255,14 @@ struct ProfileView: View {
 
     /// Optional, so it is a button until there is a date. A date picker sitting
     /// on today would read as a real answer.
+    /// The one thing the country decides, said where it is chosen rather
+    /// than left for the sidebar to reveal.
+    private var countryCaption: String {
+        active.countryCode == Countries.portugal
+            ? "The Tax screen models the Portuguese system, so it is offered here."
+            : "The Tax screen models the Portuguese system only, so it is not offered."
+    }
+
     private var inceptionControl: some View {
         Group {
             if let date = active.inceptionDate {

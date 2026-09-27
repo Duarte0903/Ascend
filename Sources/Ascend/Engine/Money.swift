@@ -27,6 +27,18 @@ enum Money {
         return f
     }
 
+    /// Money to the cent, which is the only amount that can actually be paid.
+    ///
+    /// Every figure the engines report goes through this. Rounding once at the
+    /// end is not enough: a charge is levied in cents, so the parts have to be
+    /// rounded where they are worked out or a breakdown stops adding up to the
+    /// total it belongs to.
+    static func cents(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        // Scaled and rounded away from zero, the way a payslip rounds a line.
+        return (value * 100).rounded() / 100
+    }
+
     static func currency(_ value: Double, decimals: Int = 0) -> String {
         let n = formatter(decimals: decimals).string(from: NSNumber(value: value)) ?? "0"
         return "\(n)\(nnbsp)\(symbol)"

@@ -27,3 +27,30 @@ private let nnbsp = "\u{202F}"
     #expect(Money.currency(nil) == "—")
     #expect(Money.percent(nil) == "—")
 }
+
+@Suite("Rounding to the cent")
+struct MoneyCentsTests {
+    @Test("A half cent rounds away from zero, as a payslip line does")
+    func halfRoundsUp() {
+        #expect(Money.cents(2_556.2416) == 2_556.24)
+        #expect(Money.cents(2_246.816) == 2_246.82)
+        #expect(Money.cents(0.005) == 0.01)
+        #expect(Money.cents(-0.005) == -0.01)
+        #expect(Money.cents(1.004999) == 1.00)
+    }
+
+    @Test("A figure already in cents is returned unchanged")
+    func idempotent() {
+        for value in [0.0, 1.0, 19_392.72, -450.55, 1_723.53] {
+            #expect(Money.cents(value) == value)
+            #expect(Money.cents(Money.cents(value)) == Money.cents(value))
+        }
+    }
+
+    @Test("Nothing that is not a number comes back out")
+    func nonFinite() {
+        #expect(Money.cents(.nan) == 0)
+        #expect(Money.cents(.infinity) == 0)
+        #expect(Money.cents(-.infinity) == 0)
+    }
+}

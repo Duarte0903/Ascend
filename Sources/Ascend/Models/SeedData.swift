@@ -274,6 +274,22 @@ enum SeedData {
         if changed { try? context.save() }
     }
 
+    /// How often the salary is paid used to live in the tax table, where it
+    /// was a stored number nobody could see was wrong. It is a fact about a
+    /// contract, not about a tax year, so it moved to settings — and the
+    /// value already chosen has to come with it.
+    static func migratePaymentsPerYear(_ context: ModelContext) {
+        guard let settings = try? context.fetch(FetchDescriptor<AppSettings>()).first,
+              settings.taxPaymentsPerYear == 0 || settings.taxPaymentsPerYear == 12,
+              !settings.taxTableData.isEmpty,
+              let stored = try? JSONSerialization.jsonObject(with: settings.taxTableData)
+                  as? [String: Any],
+              let payments = stored["paymentsPerYear"] as? Int,
+              (12...14).contains(payments) else { return }
+        settings.taxPaymentsPerYear = payments
+        try? context.save()
+    }
+
     static func settings(in context: ModelContext) -> AppSettings {
         if let existing = try? context.fetch(FetchDescriptor<AppSettings>()).first {
             return existing

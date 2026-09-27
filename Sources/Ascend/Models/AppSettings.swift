@@ -26,13 +26,13 @@ final class AppSettings {
 
     /// The year's meal allowance, at the rate and number of days set below.
     var mealAllowanceAnnual: Double {
-        max(0, mealAllowancePerDay) * Double(max(0, mealAllowanceDaysPerYear))
+        Money.cents(max(0, mealAllowancePerDay) * Double(max(0, mealAllowanceDaysPerYear)))
     }
 
     /// What is left once the allowance is taken out: the pay the bands and the
     /// contribution actually apply to.
     var salaryExcludingMealAllowance: Double {
-        max(0, grossAnnualIncome - mealAllowanceAnnual)
+        Money.cents(max(0, grossAnnualIncome - mealAllowanceAnnual))
     }
     /// Written by the version that let part of the salary sit outside the
     /// contribution base. No longer read: contributions are charged on the
@@ -66,14 +66,27 @@ final class AppSettings {
     var mealAllowanceDaysOverride: Int = 0
     var mealAllowanceOnCard: Bool = true
     /// Off by default: a meal card buys food and nothing else.
+    /// Written by the version that let the allowance count as freely
+    /// spendable income. No longer read: a meal card is its own account, so
+    /// counting it as income too had the same money twice.
     var mealAllowanceSpendable: Bool = false
     /// The part of the year's pay that carries no tax and no contributions:
     /// expenses the employer reimburses. A yearly total, because it does not
     /// arrive on a schedule. Inside `grossAnnualIncome`, not on top of it.
     var taxExemptExpenses: Double = 0
-    /// Whether that money is yours to spend, or leaves again on the expenses
-    /// it was paid for.
+    /// Written by the version that let the reimbursed expenses count as
+    /// spendable income. No longer read: they are not in take-home either, so
+    /// counting them made the budget exceed what actually arrives.
     var taxExemptExpensesSpendable: Bool = false
+    /// How many times the salary is paid: 12 monthly, 13 with subsídio de
+    /// Natal, 14 with both. Twelve also covers subsídios paid em duodécimos,
+    /// since those are already inside each month. The subsídios themselves are
+    /// worked out from this and the gross, never entered.
+    var taxPaymentsPerYear: Int = 12
+    /// What each extra payment actually comes to, when that is not a full
+    /// month. Zero works it out from the payment count instead.
+    var taxChristmasPay: Double = 0
+    var taxHolidayPay: Double = 0
     /// Whether IRS is withheld monthly before the money arrives.
     var taxWithholdingAtSource: Bool = true
     /// The rate from the payslip, when known. 0 means it is not.
@@ -168,8 +181,15 @@ final class AppSettings {
     /// What the engine needs, or nil when the tax screen is not feeding
     /// Projections — either because it is switched off or because there is no
     /// salary to work from.
-    var taxInput: TaxInput? {
-        guard taxEnabled, grossAnnualIncome > 0 else { return nil }
+    /// The situation as entered, whether or not it drives Projections.
+    ///
+    /// The Tax screen always assesses this. `taxInput` is the same thing
+    /// gated on the handoff — one construction, so the screen and the
+    /// projection can never be assessing different situations. They once
+    /// were: a second copy of this read a legacy field and quietly dropped
+    /// IRS Jovem whenever the handoff was switched off.
+    var taxAssessmentInput: TaxInput? {
+        guard grossAnnualIncome > 0 else { return nil }
         return TaxInput(grossAnnual: salaryExcludingMealAllowance,
                         region: taxRegion,
                         dependents: taxDependents,
@@ -179,12 +199,18 @@ final class AppSettings {
                         mealAllowancePerDay: mealAllowancePerDay,
                         mealAllowanceDaysPerYear: Double(mealAllowanceDaysPerYear),
                         mealAllowanceOnCard: mealAllowanceOnCard,
-                        mealAllowanceSpendable: mealAllowanceSpendable,
                         exemptExpenses: taxExemptExpenses,
-                        exemptExpensesSpendable: taxExemptExpensesSpendable,
+                        paymentsPerYear: taxPaymentsPerYear,
+                        christmasPay: taxChristmasPay,
+                        holidayPay: taxHolidayPay,
                         withholdingAtSource: taxWithholdingAtSource,
                         withholdingRate: taxWithholdingRate,
                         table: taxTable)
+    }
+
+    /// What Projections is handed, or nil when the handoff is off.
+    var taxInput: TaxInput? {
+        taxEnabled ? taxAssessmentInput : nil
     }
 
     init(targetNetWorth: Double = 25_000, monthlyNetIncome: Double = 0,

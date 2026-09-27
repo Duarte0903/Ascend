@@ -41,7 +41,7 @@ struct TaxEngineTests {
         let income = ceilings[0] / 2
         let slices = TaxEngine.slices(on: income, brackets: table.brackets)
         #expect(slices.count == 1)
-        #expect(abs(slices[0].tax - income * table.brackets[0].rate) < 0.000_1)
+        #expect(slices[0].tax == Money.cents(income * table.brackets[0].rate))
     }
 
     @Test("Income above the top ceiling reaches the last band")
@@ -219,12 +219,42 @@ struct TaxEngineTests {
 
     // MARK: - What the rest of the app consumes
 
-    @Test("Monthly net spreads the year evenly, not over the fourteen payments")
+    @Test("Monthly net spreads the year evenly, and with no subsídios a month is a payment")
     func monthlyNetSpreadsEvenly() {
         let result = assess(28_000)
-        #expect(abs(result.netMonthly - result.netAnnual / 12) < 0.000_1)
-        #expect(abs(result.netPerPayment - result.netAnnual / 14) < 0.000_1)
-        // Fourteen payments a year means a payment is smaller than a month.
+        #expect(result.netMonthly == Money.cents(result.netAnnual / 12))
+        // Nothing arrives outside the twelve, so the two agree and the year
+        // is paid twelve times.
+        #expect(result.paymentsPerYear == 12)
+        #expect(result.netPerPayment == result.netMonthly)
+    }
+
+    @Test("Subsídios make an ordinary month smaller than the average")
+    func subsidiesShrinkTheOrdinaryMonth() {
+        var input = TaxInput(grossAnnual: 21_000, withholdingAtSource: true)
+        let even = TaxEngine.assess(input)
+        input.paymentsPerYear = 14
+        let withSubsidies = TaxEngine.assess(input)
+
+        // The same year's pay either way: only how it arrives changes.
+        #expect(withSubsidies.netAnnual == even.netAnnual)
+        #expect(withSubsidies.netMonthly == even.netMonthly)
+        #expect(withSubsidies.paymentsPerYear == 14)
+        #expect(withSubsidies.netPerPayment < withSubsidies.netMonthly)
+        // Fourteen equal payments: an ordinary month is twelve fourteenths of
+        // the year's net, spread over twelve. Compared per month, because
+        // multiplying a rounded month back up amplifies its own rounding.
+        #expect(withSubsidies.netPerPayment
+                == Money.cents(Money.cents(even.netAnnual * 12 / 14) / 12))
+        #expect(withSubsidies.subsidyCount == 2)
+        #expect(withSubsidies.subsidies == Money.cents(21_000.0 / 14 * 2))
+    }
+
+    @Test("A payment is smaller than a month once subsídios exist")
+    func paymentIsSmallerWithSubsidies() {
+        var input = TaxInput(grossAnnual: 28_000, withholdingAtSource: true)
+        input.paymentsPerYear = 13
+        let result = TaxEngine.assess(input)
         #expect(result.netPerPayment < result.netMonthly)
     }
 
@@ -296,13 +326,11 @@ struct MealAllowanceTests {
     private func assess(salary: Double = 30_000,
                         perDay: Double,
                         days: Double = 229,
-                        onCard: Bool = true,
-                        spendable: Bool = false) -> TaxAssessment {
+                        onCard: Bool = true) -> TaxAssessment {
         TaxEngine.assess(TaxInput(grossAnnual: salary,
                                   mealAllowancePerDay: perDay,
                                   mealAllowanceDaysPerYear: days,
                                   mealAllowanceOnCard: onCard,
-                                  mealAllowanceSpendable: spendable,
                                   table: table))
     }
 
@@ -360,22 +388,23 @@ struct MealAllowanceTests {
         #expect(abs(with.netAnnual - (without.netAnnual + with.mealAllowanceGross)) < 0.000_1)
     }
 
-    @Test("A card that only buys food is kept out of spendable income")
-    func cardIsNotSpendable() {
+    @Test("The allowance counts as income, because it arrives")
+    func cardIsSpendable() {
         let result = assess(perDay: 9)
-        #expect(result.spendableNetAnnual < result.netAnnual)
-        #expect(abs(result.spendableNetAnnual
-                    - (result.netAnnual - result.mealAllowanceGross)) < 0.000_1)
-        // Marking it spendable puts it back.
-        let spendable = assess(perDay: 9, spendable: true)
-        #expect(spendable.spendableNetAnnual == spendable.netAnnual)
+        // Nothing is held back here, so spendable is simply the net. The
+        // account holding the card is funded out of this in Projections,
+        // which is what keeps the same money from being counted twice.
+        #expect(result.spendableNetAnnual == result.netAnnual)
+        #expect(assess(perDay: 0).spendableNetAnnual == assess(perDay: 0).netAnnual)
     }
 
     @Test("A salary payment is worth the salary alone, not salary plus card")
     func paymentExcludesTheCard() {
         let result = assess(perDay: 9)
         let salaryNet = result.netAnnual - result.mealAllowanceGross
-        #expect(abs(result.netPerPayment - salaryNet / 14) < 0.000_1)
+        // Twelve ordinary months: there are no subsídios in this one.
+        #expect(result.paymentsPerYear == 12)
+        #expect(result.netPerPayment == Money.cents(salaryNet / 12))
     }
 
     @Test("The effective rate is measured against everything received")
@@ -825,7 +854,7 @@ struct WithholdingTests {
         let plain = assess(rate: 0.102)
         let withAllowance = assess(rate: 0.102, perDay: table.mealAllowanceCardLimit)
         #expect(abs(plain.withheldAnnual - withAllowance.withheldAnnual) < 0.000_1)
-        #expect(abs(plain.withheldAnnual - 16_917 * 0.102) < 0.000_1)
+        #expect(plain.withheldAnnual == Money.cents(16_917 * 0.102))
     }
 
     @Test("Withholding more than the tax due means a refund")
@@ -868,8 +897,10 @@ struct WithholdingTests {
         let on = assess()
         let off = assess(atSource: false)
         #expect(off.budgetMonthlyIncome > on.budgetMonthlyIncome)
+        // Within a cent: two figures each rounded to the cent are compared
+        // against a third that is rounded on its own.
         #expect(abs((off.budgetMonthlyIncome - on.budgetMonthlyIncome)
-                    - on.taxDue / 12) < 0.000_1)
+                    - on.taxDue / 12) < 0.01)
     }
 
     @Test("A known rate sharpens the monthly figure and shows the refund")
@@ -886,12 +917,11 @@ struct WithholdingTests {
         #expect(assess(rate: 0.25, atSource: false).withheldAnnual == 0)
     }
 
-    @Test("The budget figure still holds the meal card back")
-    func budgetStaysSpendableOnly() {
+    @Test("The budget figure counts the meal card")
+    func budgetIncludesTheCard() {
         let result = assess(rate: 0.102, perDay: 10.20)
         #expect(result.mealAllowanceGross > 0)
-        #expect(abs(result.budgetMonthlyIncome
-                    - (result.takeHomeAnnual - result.mealAllowanceGross) / 12) < 0.000_1)
+        #expect(result.budgetMonthlyIncome == Money.cents(result.takeHomeAnnual / 12))
     }
 
     @Test("An absurd rate is clamped rather than producing negative pay")
@@ -1220,8 +1250,8 @@ struct SpendableConsistencyTests {
     func annualAndMonthlyAgree() {
         for rate in [0.0, 0.102, 0.30] {
             let result = assess(rate: rate)
-            #expect(abs(result.budgetAnnualIncome / 12
-                        - result.budgetMonthlyIncome) < 0.000_1)
+            // The monthly figure is the annual one over twelve, to the cent.
+            #expect(result.budgetMonthlyIncome == Money.cents(result.budgetAnnualIncome / 12))
         }
     }
 
@@ -1242,11 +1272,10 @@ struct SpendableConsistencyTests {
         #expect(abs(result.budgetAnnualIncome - result.spendableNetAnnual) < 0.000_1)
     }
 
-    @Test("Spendable holds the meal card back, on either basis")
-    func mealCardHeldBack() {
+    @Test("With nothing to hold back, spendable is take-home")
+    func nothingHeldBack() {
         let result = assess(rate: 0.102)
-        #expect(abs((result.takeHomeAnnual - result.budgetAnnualIncome)
-                    - result.mealAllowanceGross) < 0.000_1)
+        #expect(result.budgetAnnualIncome == result.takeHomeAnnual)
     }
 }
 
@@ -1306,7 +1335,7 @@ struct TaxHandoffTests {
         // Not the gross, not the assessment, not the meal card.
         #expect(handed < subject.grossAnnualIncome / 12)
         #expect(handed != assessment.spendableNetMonthly)
-        #expect(handed == assessment.budgetAnnualIncome / 12)
+        #expect(handed == Money.cents(assessment.budgetAnnualIncome / 12))
     }
 
     @Test("Switching it off hands control straight back")
@@ -1416,7 +1445,7 @@ struct GrossIncludesAllowanceTests {
     func allowanceIsNotTaxedTwice() {
         let subject = settings(gross: 23_118.40)
         let assessment = TaxEngine.assess(subject.taxInput!)
-        #expect(abs(assessment.socialSecurity - 20_425.60 * 0.11) < 0.000_1)
+        #expect(assessment.socialSecurity == Money.cents(20_425.60 * 0.11))
         #expect(assessment.mealAllowanceTaxable == 0)
     }
 
@@ -1673,13 +1702,12 @@ struct LeftoverContributionDerivedTests {
 struct ExemptExpensesTests {
     /// The figures the app is configured with, so the suite tests the real
     /// shape: salary with a meal allowance on a card.
-    private func input(expenses: Double, spendable: Bool = false) -> TaxInput {
+    private func input(expenses: Double) -> TaxInput {
         TaxInput(grossAnnual: 17_000,
                  mealAllowancePerDay: 10.20,
                  mealAllowanceDaysPerYear: 220,
                  mealAllowanceOnCard: true,
                  exemptExpenses: expenses,
-                 exemptExpensesSpendable: spendable,
                  withholdingAtSource: true)
     }
 
@@ -1717,17 +1745,19 @@ struct ExemptExpensesTests {
         #expect(with.netAnnual > plain.netAnnual)
     }
 
-    @Test("Held back, it stays out of every spendable figure")
+    @Test("It stays out of every spendable figure, with no way back in")
     func notSpendable() {
         let held = TaxEngine.assess(input(expenses: 4_200))
-        let mine = TaxEngine.assess(input(expenses: 4_200, spendable: true))
 
-        #expect(mine.spendableNetAnnual - held.spendableNetAnnual == 4_200)
-        #expect(mine.budgetAnnualIncome - held.budgetAnnualIncome == 4_200)
-        // Only the spendable figures move: the assessment itself is the same.
-        #expect(mine.taxDue == held.taxDue)
-        #expect(mine.netAnnual == held.netAnnual)
-        #expect(mine.budgetMonthlyIncome == mine.budgetAnnualIncome / 12)
+        // Reimbursed expenses are absent from take-home, so counting them as
+        // budget money would put the budget above what actually arrives. The
+        // allowance is a different case: it arrives, so it stays in.
+        #expect(held.spendableNetAnnual == Money.cents(held.netAnnual - 4_200))
+        #expect(held.budgetAnnualIncome == Money.cents(held.takeHomeAnnual - 4_200))
+        #expect(held.budgetMonthlyIncome == Money.cents(held.budgetAnnualIncome / 12))
+        // Entering them lowers the budget, never raises it.
+        #expect(held.budgetAnnualIncome
+                < TaxEngine.assess(input(expenses: 0)).budgetAnnualIncome)
     }
 
     @Test("More than the salary is clamped to the salary")
@@ -1746,19 +1776,14 @@ struct ExemptExpensesTests {
         #expect(TaxEngine.assess(input(expenses: -500)) == TaxEngine.assess(input(expenses: 0)))
     }
 
-    @Test("The two held-back parts come off together, each on its own switch")
-    func bothHeldBack() {
-        var both = input(expenses: 4_200)
-        both.mealAllowanceSpendable = false
-        let assessment = TaxEngine.assess(both)
-
+    @Test("Only the expenses come off; the allowance stays in")
+    func onlyExpensesHeldBack() {
+        let assessment = TaxEngine.assess(input(expenses: 4_200))
+        #expect(assessment.spendableNetAnnual == Money.cents(assessment.netAnnual - 4_200))
+        // The allowance is inside it, which is what lets Projections fund the
+        // card's own account out of income rather than from nowhere.
         #expect(assessment.spendableNetAnnual
-                == assessment.netAnnual - assessment.mealAllowanceGross - 4_200)
-
-        var allMine = both
-        allMine.mealAllowanceSpendable = true
-        allMine.exemptExpensesSpendable = true
-        #expect(TaxEngine.assess(allMine).spendableNetAnnual == assessment.netAnnual)
+                > Money.cents(assessment.netAnnual - assessment.mealAllowanceGross - 4_200))
     }
 }
 
@@ -1767,14 +1792,13 @@ struct ExemptExpensesTests {
 /// first year, and expenses reimbursed inside the pay.
 @Suite("Untaxed expenses, in the round")
 struct ExemptExpensesScenarioTests {
-    private func assess(expenses: Double, spendable: Bool = false) -> TaxAssessment {
+    private func assess(expenses: Double) -> TaxAssessment {
         TaxEngine.assess(TaxInput(grossAnnual: 26_000 - 10.46 * 264,
                                   youngTaxpayerYear: 1,
                                   mealAllowancePerDay: 10.46,
                                   mealAllowanceDaysPerYear: 264,
                                   mealAllowanceOnCard: true,
                                   exemptExpenses: expenses,
-                                  exemptExpensesSpendable: spendable,
                                   withholdingAtSource: true))
     }
 
@@ -1791,16 +1815,494 @@ struct ExemptExpensesScenarioTests {
         #expect(abs((plain.socialSecurity - with.socialSecurity) - 462) < 0.01)
     }
 
-    @Test("Held back it lowers the monthly budget; spendable it raises it")
+    @Test("Entering it lowers the monthly budget, and nothing puts it back")
     func monthlyBudget() {
-        #expect(abs(assess(expenses: 0).budgetMonthlyIncome - 1_723.53) < 0.01)
-        #expect(abs(assess(expenses: 4_200).budgetMonthlyIncome - 1_412.03) < 0.01)
-        #expect(abs(assess(expenses: 4_200, spendable: true).budgetMonthlyIncome - 1_762.03) < 0.01)
+        #expect(abs(assess(expenses: 0).budgetMonthlyIncome - 1_953.65) < 0.01)
+        // 4 200 a year held back is 350 a month off the budget, less the
+        // 38,50 of contributions no longer charged on it.
+        #expect(abs(assess(expenses: 4_200).budgetMonthlyIncome - 1_642.15) < 0.01)
+        #expect(assess(expenses: 4_200).budgetMonthlyIncome
+                < assess(expenses: 0).budgetMonthlyIncome)
     }
 
     @Test("The allowance at exactly the card limit is wholly exempt")
     func allowanceAtTheLimit() {
         #expect(assess(expenses: 4_200).mealAllowanceTaxable == 0)
         #expect(abs(assess(expenses: 4_200).mealAllowanceGross - 2_761.44) < 0.01)
+    }
+}
+
+/// Money is paid in cents, so no figure the engine reports may carry a
+/// fraction of one — and the parts have to reconcile with the totals they
+/// belong to, which only holds if the rounding happens where each charge is
+/// worked out rather than once at the end.
+@Suite("Every figure is whole cents")
+struct CentRoundingTests {
+    /// Deliberately awkward: rates and day counts that do not divide evenly.
+    private let cases: [TaxInput] = [
+        TaxInput(grossAnnual: 23_238.56, youngTaxpayerYear: 1,
+                 mealAllowancePerDay: 10.46, mealAllowanceDaysPerYear: 264,
+                 exemptExpenses: 4_200, withholdingAtSource: true),
+        TaxInput(grossAnnual: 16_917.33, dependents: 1,
+                 mealAllowancePerDay: 7.63, mealAllowanceDaysPerYear: 251,
+                 mealAllowanceOnCard: false, exemptExpenses: 1_234.56,
+                 paymentsPerYear: 13,
+                 withholdingAtSource: true, withholdingRate: 0.102),
+        TaxInput(grossAnnual: 91_111.11, dependents: 3, jointTaxation: true,
+                 otherCredits: 333.33,
+                 mealAllowancePerDay: 12.37, mealAllowanceDaysPerYear: 219,
+                 withholdingAtSource: true, withholdingRate: 0.237),
+        TaxInput(grossAnnual: 7.77, mealAllowancePerDay: 0.01,
+                 mealAllowanceDaysPerYear: 3, withholdingAtSource: false),
+    ]
+
+    private func isWholeCents(_ value: Double) -> Bool {
+        Money.cents(value) == value
+    }
+
+    @Test("No reported amount carries a fraction of a cent")
+    func everyFigureIsCents() {
+        for input in cases {
+            let a = TaxEngine.assess(input)
+            let amounts: [(String, Double)] = [
+                ("grossAnnual", a.grossAnnual), ("totalGross", a.totalGrossAnnual),
+                ("mealGross", a.mealAllowanceGross), ("mealExempt", a.mealAllowanceExempt),
+                ("mealTaxable", a.mealAllowanceTaxable),
+                ("socialSecurity", a.socialSecurity), ("exemptIncome", a.exemptIncome),
+                ("exemptExpenses", a.exemptExpenses),
+                ("specific", a.specificDeduction), ("taxable", a.taxableIncome),
+                ("beforeCredits", a.taxBeforeCredits), ("solidarity", a.solidaritySurcharge),
+                ("credits", a.credits), ("due", a.taxDue),
+                ("net", a.netAnnual), ("netMonthly", a.netMonthly),
+                ("perPayment", a.netPerPayment), ("withheld", a.withheldAnnual),
+                ("balance", a.withholdingBalance),
+                ("takeHome", a.takeHomeAnnual), ("takeHomeMonthly", a.takeHomeMonthly),
+                ("budgetAnnual", a.budgetAnnualIncome), ("budgetMonthly", a.budgetMonthlyIncome),
+                ("spendableAnnual", a.spendableNetAnnual),
+                ("spendableMonthly", a.spendableNetMonthly),
+            ]
+            for (name, value) in amounts {
+                #expect(isWholeCents(value), "\(name) is \(value)")
+            }
+            for slice in a.slices {
+                #expect(isWholeCents(slice.tax))
+                #expect(isWholeCents(slice.amountTaxed))
+            }
+        }
+    }
+
+    @Test("The band breakdown adds up to the tax charged, to the cent")
+    func slicesReconcile() {
+        for input in cases where !input.jointTaxation {
+            let a = TaxEngine.assess(input)
+            let summed = a.slices.reduce(0) { $0 + $1.tax }
+            // Mainland has no regional reduction, so the two are the same figure.
+            #expect(Money.cents(summed) == a.taxBeforeCredits)
+        }
+    }
+
+    @Test("Net is exactly what is received less what is taken")
+    func netReconciles() {
+        for input in cases {
+            let a = TaxEngine.assess(input)
+            #expect(a.netAnnual == Money.cents(a.totalGrossAnnual - a.socialSecurity - a.taxDue))
+            #expect(a.takeHomeAnnual
+                    == Money.cents(a.totalGrossAnnual - a.socialSecurity - a.withheldAnnual))
+        }
+    }
+
+    @Test("Gross is exactly the salary plus the whole allowance")
+    func grossReconciles() {
+        for input in cases {
+            let a = TaxEngine.assess(input)
+            #expect(a.totalGrossAnnual == Money.cents(a.grossAnnual + a.mealAllowanceGross))
+            #expect(a.mealAllowanceGross
+                    == Money.cents(a.mealAllowanceExempt + a.mealAllowanceTaxable))
+        }
+    }
+}
+
+/// Checked against a real Talão de Remunerações: September 2026, base 1 250,00
+/// plus 250,00 Isenção Horário de Trabalho, 22 days of meal card at 10,46,
+/// social security 165,00, IRS blank under IRS Jovem, net 1 565,12 of which
+/// 1 335,00 arrives by transfer and 230,12 on the card.
+///
+/// The year is 14 payments of that, plus 2 300 of expenses reimbursed outside
+/// payroll — which is what makes the package 26 061,44 rather than the
+/// 23 061,44 twelve payments would give.
+@Suite("Reconciles with the payslip")
+struct PayslipReconciliationTests {
+    private let assessment = TaxEngine.assess(
+        TaxInput(grossAnnual: 23_300,                 // 1 500 x 14, plus the 2 300
+                 youngTaxpayerYear: 1,
+                 mealAllowancePerDay: 10.46,
+                 mealAllowanceDaysPerYear: 264,       // 22 a month
+                 mealAllowanceOnCard: true,
+                 exemptExpenses: 2_300,
+                 paymentsPerYear: 14,
+                 withholdingAtSource: true))
+
+    @Test("Social security is the payslip's 165,00, fourteen times")
+    func socialSecurity() {
+        #expect(assessment.paymentsPerYear == 14)
+        #expect(assessment.socialSecurity == 2_310)
+        #expect(Money.cents(assessment.socialSecurity / 14) == 165)
+        // The card is at the exempt limit, so it is outside the base, and the
+        // reimbursed expenses never enter it.
+        #expect(assessment.mealAllowanceTaxable == 0)
+        #expect(assessment.exemptExpenses == 2_300)
+    }
+
+    @Test("IRS Jovem leaves nothing to withhold, as the blank IRS line shows")
+    func noTax() {
+        #expect(assessment.taxableIncome == 0)
+        #expect(assessment.taxDue == 0)
+    }
+
+    @Test("The package is 26 061,44, not the 26k rounded figure")
+    func packageTotal() {
+        #expect(assessment.totalGrossAnnual == 26_061.44)
+        #expect(assessment.grossAnnual == 23_300)
+    }
+
+    @Test("An ordinary month is the amount paid by bank transfer")
+    func bankTransfer() {
+        // Neither the card, the expenses nor the subsídios arrive with it.
+        #expect(assessment.monthlySalaryGross == 1_500)
+        #expect(assessment.netPerPayment == 1_335)
+        #expect(assessment.subsidies == 3_000)
+        #expect(Money.cents(assessment.mealAllowanceGross / 12) == 230.12)
+    }
+
+    @Test("Spendable counts the card and excludes only the expenses")
+    func spendable() {
+        #expect(assessment.spendableNetAnnual == 21_451.44)
+        #expect(assessment.spendableNetMonthly == 1_787.62)
+        // The salary alone, which is what one payment is worth, is the rest.
+        #expect(assessment.netPerPayment == 1_335)
+    }
+}
+
+/// Switching the Projections handoff off must change only where the figure
+/// goes, never the assessment itself. A second copy of the input construction
+/// once read a legacy field, so turning the handoff off silently dropped
+/// IRS Jovem and the tax leapt up.
+@Suite("The handoff does not change the assessment")
+struct HandoffIsolationTests {
+    private func settings() -> AppSettings {
+        let s = AppSettings()
+        s.grossAnnualIncome = 26_061.44
+        s.mealAllowancePerDay = 10.46
+        s.mealAllowanceDaysOverride = 264
+        s.mealAllowanceOnCard = true
+        s.taxExemptExpenses = 2_300
+        s.taxPaymentsPerYear = 14
+        s.taxYoungTaxpayerFirstYear = 2026
+        s.taxWithholdingAtSource = true
+        s.taxEnabled = true
+        return s
+    }
+
+    @Test("IRS Jovem still applies when the handoff is off")
+    func youngTaxpayerSurvives() {
+        let subject = settings()
+        let driving = TaxEngine.assess(subject.taxAssessmentInput!)
+        subject.taxEnabled = false
+        let notDriving = TaxEngine.assess(subject.taxAssessmentInput!)
+
+        #expect(driving == notDriving)
+        #expect(notDriving.exemptIncome > 0)
+        #expect(notDriving.taxDue == 0)
+    }
+
+    @Test("Only the handoff itself is withdrawn")
+    func handoffIsWhatChanges() {
+        let subject = settings()
+        #expect(subject.taxInput != nil)
+        subject.taxEnabled = false
+        #expect(subject.taxInput == nil)
+        // The screen keeps assessing regardless.
+        #expect(subject.taxAssessmentInput != nil)
+    }
+}
+
+/// The payment count is the only thing entered; the subsídios follow from it
+/// and the gross, so the two can never disagree.
+@Suite("Payments a year")
+struct PaymentCountTests {
+    private func assess(_ payments: Int) -> TaxAssessment {
+        TaxEngine.assess(TaxInput(grossAnnual: 21_000,
+                                  youngTaxpayerYear: 1,
+                                  paymentsPerYear: payments,
+                                  withholdingAtSource: true))
+    }
+
+    @Test("Twelve means no subsídios at all")
+    func monthlyOnly() {
+        let a = assess(12)
+        #expect(a.subsidyCount == 0)
+        #expect(a.subsidies == 0)
+        #expect(a.monthlySalaryGross == 1_750)
+        #expect(a.netPerPayment == a.netMonthly)
+    }
+
+    @Test("Thirteen is subsídio de Natal alone")
+    func natalOnly() {
+        let a = assess(13)
+        #expect(a.subsidyCount == 1)
+        #expect(a.monthlySalaryGross == Money.cents(21_000.0 / 13))
+        #expect(a.subsidies == a.monthlySalaryGross)
+    }
+
+    @Test("Fourteen splits the same pay into fourteen equal payments")
+    func both() {
+        let a = assess(14)
+        #expect(a.subsidyCount == 2)
+        #expect(a.monthlySalaryGross == 1_500)
+        #expect(a.subsidies == 3_000)
+        // The year's pay is unchanged: only how it arrives.
+        #expect(a.totalGrossAnnual == assess(12).totalGrossAnnual)
+        #expect(a.netAnnual == assess(12).netAnnual)
+        #expect(a.netMonthly == assess(12).netMonthly)
+    }
+
+    @Test("An unusual count still divides the same pay")
+    func custom() {
+        let a = assess(15)
+        #expect(a.subsidyCount == 3)
+        #expect(a.monthlySalaryGross == Money.cents(21_000.0 / 15))
+        #expect(a.netAnnual == assess(12).netAnnual)
+    }
+
+    @Test("Fewer than twelve payments is not a thing, and is ignored")
+    func belowTwelve() {
+        #expect(assess(4).paymentsPerYear == 12)
+        #expect(assess(0).subsidyCount == 0)
+    }
+}
+
+/// The figure a payslip's total líquido shows, which is neither the monthly
+/// average nor the bank transfer on its own.
+@Suite("One month's payslip")
+struct OrdinaryMonthTests {
+    private let assessment = TaxEngine.assess(
+        TaxInput(grossAnnual: 23_300,
+                 youngTaxpayerYear: 1,
+                 mealAllowancePerDay: 10.46,
+                 mealAllowanceDaysPerYear: 264,
+                 mealAllowanceOnCard: true,
+                 exemptExpenses: 2_300,
+                 paymentsPerYear: 14,
+                 withholdingAtSource: true))
+
+    @Test("It is the transfer plus that month's allowance")
+    func matchesThePayslip() {
+        #expect(assessment.netPerPayment == 1_335)
+        #expect(assessment.netPerOrdinaryMonth == 1_565.12)
+        #expect(assessment.netPerOrdinaryMonth
+                == Money.cents(assessment.netPerPayment
+                               + assessment.mealAllowanceGross / 12))
+    }
+
+    @Test("It is smaller than the average, by the subsídios and the expenses")
+    func smallerThanTheAverage() {
+        #expect(assessment.netPerOrdinaryMonth < assessment.netMonthly)
+        // 3 000 of subsídios less their 11%, plus the 2 300 of expenses,
+        // spread over twelve.
+        let gap = assessment.netMonthly - assessment.netPerOrdinaryMonth
+        #expect(abs(gap - (3_000 * 0.89 + 2_300) / 12) < 0.01)
+    }
+
+    @Test("With no allowance it is simply the payment")
+    func noAllowance() {
+        let plain = TaxEngine.assess(TaxInput(grossAnnual: 21_000,
+                                              paymentsPerYear: 14,
+                                              withholdingAtSource: true))
+        #expect(plain.netPerOrdinaryMonth == plain.netPerPayment)
+    }
+}
+
+/// The chart shows every euro the employer pays, split once. Extra payments
+/// are carved out of take-home rather than added to it, so the parts still
+/// add up to the gross — the invariant the wedges rely on.
+@Suite("Extra payments split the pay, not add to it")
+struct ExtraPaymentsSplitTests {
+    private func assess(payments: Int, expenses: Double) -> TaxAssessment {
+        TaxEngine.assess(TaxInput(grossAnnual: 23_300,
+                                  youngTaxpayerYear: 1,
+                                  mealAllowancePerDay: 10.46,
+                                  mealAllowanceDaysPerYear: 264,
+                                  mealAllowanceOnCard: true,
+                                  exemptExpenses: expenses,
+                                  paymentsPerYear: payments,
+                                  withholdingAtSource: true))
+    }
+
+    @Test("The parts add up to what the employer pays")
+    func partsMakeTheWhole() {
+        for payments in [12, 13, 14, 15] {
+            for expenses in [0.0, 2_300.0] {
+                let a = assess(payments: payments, expenses: expenses)
+                let monthly = a.spendableNetAnnual - a.mealAllowanceGross - a.subsidiesNet
+                let total = monthly + a.subsidiesNet + a.mealAllowanceGross
+                    + a.exemptExpenses + a.socialSecurity + a.withheldAnnual
+                #expect(abs(total - a.totalGrossAnnual) < 0.02,
+                        "\(payments) payments, \(expenses) expenses")
+            }
+        }
+    }
+
+    @Test("What is charged on them is their share, not a separate bill")
+    func chargedIsAShare() {
+        let a = assess(payments: 14, expenses: 2_300)
+        #expect(a.subsidies == 3_000)
+        #expect(a.subsidiesNet == 2_670)
+        // 11% of 3 000; IRS Jovem leaves nothing else to take.
+        #expect(a.subsidiesCharged == 330)
+        #expect(a.subsidies == Money.cents(a.subsidiesNet + a.subsidiesCharged))
+    }
+
+    @Test("Twelve payments leave nothing to carve out")
+    func twelveHasNone() {
+        let a = assess(payments: 12, expenses: 2_300)
+        #expect(a.subsidiesNet == 0)
+        #expect(a.subsidiesCharged == 0)
+        // The year's spendable does not depend on how it is paid out; only
+        // how it splits between ordinary months and extra payments does.
+        #expect(a.spendableNetAnnual == 21_451.44)
+        #expect(a.netPerPayment == Money.cents(18_690.0 / 12))
+        #expect(a.spendableNetAnnual
+                == assess(payments: 14, expenses: 2_300).spendableNetAnnual)
+    }
+}
+
+/// What each extra payment comes to can be stated rather than assumed: a
+/// first year pro-rates them, and the two are not always worth the same.
+@Suite("Extra payments, as entered")
+struct StatedSubsidiesTests {
+    private func assess(payments: Int,
+                        christmas: Double = 0,
+                        holiday: Double = 0) -> TaxAssessment {
+        TaxEngine.assess(TaxInput(grossAnnual: 21_000,
+                                  youngTaxpayerYear: 1,
+                                  paymentsPerYear: payments,
+                                  christmasPay: christmas,
+                                  holidayPay: holiday,
+                                  withholdingAtSource: true))
+    }
+
+    @Test("Zero keeps the worked-out figure: a full month each")
+    func zeroDerives() {
+        let a = assess(payments: 14)
+        #expect(a.christmasPay == 1_500)
+        #expect(a.holidayPay == 1_500)
+        #expect(a.subsidies == 3_000)
+        #expect(a.monthlySalaryGross == 1_500)
+    }
+
+    @Test("The two can differ, and each is taken as given")
+    func theyCanDiffer() {
+        // Started in May: holiday pay pro rata, Christmas pay in full.
+        let a = assess(payments: 14, christmas: 1_500, holiday: 1_000)
+        #expect(a.holidayPay == 1_000)
+        #expect(a.christmasPay == 1_500)
+        #expect(a.subsidies == 2_500)
+        #expect(a.monthlySalaryGross == Money.cents(18_500.0 / 12))
+        // The year's pay has not changed, only how it is split up.
+        #expect(a.totalGrossAnnual == assess(payments: 14).totalGrossAnnual)
+        #expect(a.netAnnual == assess(payments: 14).netAnnual)
+    }
+
+    @Test("Setting only one leaves the other a full month")
+    func oneAtATime() {
+        let a = assess(payments: 14, holiday: 800)
+        #expect(a.holidayPay == 800)
+        #expect(a.christmasPay == 1_500)
+        #expect(a.subsidies == 2_300)
+    }
+
+    @Test("Stating less leaves an ordinary month holding more")
+    func lessSubsidyMeansFatterMonths() {
+        let full = assess(payments: 14)
+        let prorata = assess(payments: 14, christmas: 500, holiday: 500)
+        #expect(prorata.netPerPayment > full.netPerPayment)
+        #expect(prorata.subsidiesNet < full.subsidiesNet)
+        // Whatever the split, the parts still make the whole.
+        #expect(abs(prorata.netPerPayment * 12 + prorata.subsidiesNet
+                    - prorata.spendableNetAnnual) < 0.12)
+    }
+
+    @Test("At thirteen payments only Christmas pay applies")
+    func thirteenIsChristmasOnly() {
+        let a = assess(payments: 13, christmas: 900, holiday: 5_000)
+        #expect(a.christmasPay == 900)
+        #expect(a.holidayPay == 0)
+        #expect(a.subsidies == 900)
+    }
+
+    @Test("Both are ignored when there are no extra payments to describe")
+    func ignoredAtTwelve() {
+        let a = assess(payments: 12, christmas: 5_000, holiday: 5_000)
+        #expect(a.subsidies == 0)
+        #expect(a.subsidyCount == 0)
+        #expect(a.monthlySalaryGross == 1_750)
+    }
+
+    @Test("More than the salary is clamped to it")
+    func clamped() {
+        #expect(assess(payments: 14, christmas: 90_000).subsidies == 21_000)
+    }
+}
+
+/// A budget runs on an ordinary month. Holiday and Christmas pay are real,
+/// but they turn up twice a year — spreading them over twelve would show
+/// every month holding money it does not have.
+@Suite("Projections budget on an ordinary month")
+struct OrdinaryMonthBudgetTests {
+    private func assess(payments: Int) -> TaxAssessment {
+        TaxEngine.assess(TaxInput(grossAnnual: 23_338.56,
+                                  youngTaxpayerYear: 1,
+                                  mealAllowancePerDay: 10.46,
+                                  mealAllowanceDaysPerYear: 264,
+                                  mealAllowanceOnCard: true,
+                                  exemptExpenses: 2_300,
+                                  paymentsPerYear: payments,
+                                  withholdingAtSource: true))
+    }
+
+    @Test("The budget is one payslip, not the year over twelve")
+    func budgetIsAPayslip() {
+        let a = assess(payments: 14)
+        #expect(a.budgetMonthlyIncome == a.netPerOrdinaryMonth)
+        // The year's spendable still has the extra payments in it.
+        #expect(a.spendableNetMonthly > a.budgetMonthlyIncome)
+        #expect(abs((a.spendableNetMonthly - a.budgetMonthlyIncome)
+                    - a.subsidiesNet / 12) < 0.02)
+    }
+
+    @Test("With no extra payments the two agree")
+    func twelveAgrees() {
+        let a = assess(payments: 12)
+        #expect(a.subsidyCount == 0)
+        #expect(a.budgetMonthlyIncome == a.netPerOrdinaryMonth)
+        #expect(a.budgetMonthlyIncome == a.spendableNetMonthly)
+    }
+
+    @Test("Adding extra payments does not raise the budget")
+    func morePaymentsDoNotInflateIt() {
+        // The same yearly pay, split more ways: an ordinary month gets
+        // smaller, so the budget does too.
+        #expect(assess(payments: 14).budgetMonthlyIncome
+                < assess(payments: 12).budgetMonthlyIncome)
+        #expect(assess(payments: 14).spendableNetAnnual
+                == assess(payments: 12).spendableNetAnnual)
+    }
+
+    @Test("The card is in the budget; the expenses are not")
+    func whatIsInIt() {
+        let a = assess(payments: 14)
+        #expect(a.budgetMonthlyIncome
+                == Money.cents(a.netPerPayment + a.mealAllowanceGross / 12))
+        #expect(a.exemptExpenses == 2_300)
     }
 }

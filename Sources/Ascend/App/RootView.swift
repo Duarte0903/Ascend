@@ -15,6 +15,7 @@ struct RootView: View {
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
 
     private var profileKind: ProfileKind { profiles.registry.active.kind }
+    private var profileCountry: String { profiles.registry.active.countryCode }
 
     private var appearance: Binding<AppearanceSetting> {
         Binding(get: { AppearanceSetting(rawValue: appearanceRaw) ?? .system },
@@ -60,7 +61,7 @@ struct RootView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
-            ForEach(AppSection.groups(for: profileKind), id: \.label) { group in
+            ForEach(AppSection.groups(for: profileKind, in: profileCountry), id: \.label) { group in
                 SwiftUI.Section {
                     ForEach(group.items) { section in
                         Label {
@@ -115,8 +116,12 @@ struct RootView: View {
         }
 
         .onAppear { appearance.wrappedValue.apply() }
+        // A section can fall away when either changes, so both are watched.
         .onChange(of: profileKind) { _, kind in
-            if !selection.isAvailable(to: kind) { selection = .dashboard }
+            if !selection.isAvailable(to: kind, in: profileCountry) { selection = .dashboard }
+        }
+        .onChange(of: profileCountry) { _, country in
+            if !selection.isAvailable(to: profileKind, in: country) { selection = .dashboard }
         }
     }
 
@@ -124,7 +129,8 @@ struct RootView: View {
         Group {
             // Falls back rather than trusting the selection: a screen that is
             // not in the sidebar must not be reachable by any route.
-            switch selection.isAvailable(to: profileKind) ? selection : .dashboard {
+            switch selection.isAvailable(to: profileKind, in: profileCountry)
+            ? selection : .dashboard {
             case .dashboard: DashboardView()
             case .balances: BalancesView()
             case .trends: TrendsView()

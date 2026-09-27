@@ -322,34 +322,49 @@ struct ProfileKindTests {
 @Suite("Sidebar sections")
 struct AppSectionAvailabilityTests {
 
-    private func sections(for kind: ProfileKind) -> [AppSection] {
-        AppSection.groups(for: kind).flatMap(\.items)
+    private func sections(for kind: ProfileKind,
+                          in country: String = Countries.portugal) -> [AppSection] {
+        AppSection.groups(for: kind, in: country).flatMap(\.items)
     }
 
-    @Test("A person gets every screen, tax included")
+    @Test("A person in Portugal gets every screen, tax included")
     func personSeesTax() {
         #expect(sections(for: .person).contains(.tax))
-        #expect(AppSection.tax.isAvailable(to: .person))
+        #expect(AppSection.tax.isAvailable(to: .person, in: Countries.portugal))
     }
 
     @Test("An organisation is not offered a personal income tax screen")
     func organizationHasNoTax() {
         #expect(!sections(for: .organization).contains(.tax))
-        #expect(!AppSection.tax.isAvailable(to: .organization))
+        #expect(!AppSection.tax.isAvailable(to: .organization, in: Countries.portugal))
+    }
+
+    @Test("A person elsewhere is not offered it either")
+    func abroadHasNoTax() {
+        for country in ["ES", "FR", "BR", "US", ""] {
+            #expect(!sections(for: .person, in: country).contains(.tax),
+                    "tax offered in \(country)")
+            #expect(!AppSection.tax.isAvailable(to: .person, in: country))
+        }
     }
 
     @Test("Only tax is withheld — every other screen is offered to both")
     func nothingElseIsHidden() {
         let hidden = Set(sections(for: .person)).subtracting(sections(for: .organization))
         #expect(hidden == [.tax])
+        // And withholding it is all that moving country does.
+        #expect(Set(sections(for: .person)).subtracting(sections(for: .person, in: "ES"))
+                == [.tax])
     }
 
     @Test("Groups keep their order and none is left empty")
     func groupsStayIntact() {
         for kind in ProfileKind.allCases {
-            let groups = AppSection.groups(for: kind)
-            #expect(groups.map(\.label) == ["Overview", "Planning", "Setup"])
-            #expect(groups.allSatisfy { !$0.items.isEmpty })
+            for country in [Countries.portugal, "ES"] {
+                let groups = AppSection.groups(for: kind, in: country)
+                #expect(groups.map(\.label) == ["Overview", "Planning", "Setup"])
+                #expect(groups.allSatisfy { !$0.items.isEmpty })
+            }
         }
     }
 
@@ -359,5 +374,53 @@ struct AppSectionAvailabilityTests {
             let items = sections(for: kind)
             #expect(Set(items).count == items.count)
         }
+    }
+}
+
+/// A profile carries the country whose rules apply to it, which is what keeps
+/// a Portuguese tax screen away from someone who is not taxed in Portugal.
+@Suite("Profile country")
+struct ProfileCountryTests {
+    @Test("A new profile is Portuguese, the one system modelled")
+    func defaultsToPortugal() {
+        #expect(Profile(name: "Personal").countryCode == Countries.portugal)
+    }
+
+    @Test("A profile saved before the field existed keeps its Tax screen")
+    func olderProfilesAssumePortugal() throws {
+        // Every key the old format wrote, and nothing the new one added.
+        let json = """
+        {"id":"\(UUID().uuidString)","name":"Personal","fileName":"a.store"}
+        """
+        let profile = try JSONDecoder().decode(Profile.self, from: Data(json.utf8))
+        #expect(profile.countryCode == Countries.portugal)
+        #expect(AppSection.tax.isAvailable(to: profile.kind, in: profile.countryCode))
+    }
+
+    @Test("The choice survives a round trip")
+    func roundTrips() throws {
+        var profile = Profile(name: "Madrid")
+        profile.countryCode = "ES"
+        let data = try JSONEncoder().encode(profile)
+        #expect(try JSONDecoder().decode(Profile.self, from: data).countryCode == "ES")
+    }
+
+    @Test("The list is real countries, sorted by name, Portugal among them")
+    func theList() {
+        let all = Countries.all
+        #expect(all.contains(Countries.portugal))
+        #expect(all.allSatisfy { $0.count == 2 })
+        // No continents or groupings like "019" for the Americas.
+        #expect(all.allSatisfy { $0.allSatisfy(\.isLetter) })
+        let names = all.map { Countries.name(for: $0) }
+        #expect(names == names.sorted { $0.localizedCompare($1) == .orderedAscending })
+    }
+
+    @Test("A code the system cannot name falls back to the code itself")
+    func unknownCode() {
+        // "QQ" is unassigned. "ZZ" is not a good test: CLDR knows it as the
+        // "unknown region" and returns a translated name for it.
+        #expect(Countries.name(for: "QQ") == "QQ")
+        #expect(!Countries.all.contains("QQ"))
     }
 }

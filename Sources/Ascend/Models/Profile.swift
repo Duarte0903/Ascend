@@ -105,6 +105,14 @@ struct Profile: Identifiable, Codable, Hashable {
     /// Optional. Its only job is to derive an age.
     var birthDate: Date?
     var location: String
+    /// Which country's rules apply, as an ISO 3166-1 alpha-2 code. It decides
+    /// whether the Tax screen is offered at all: what that screen models is
+    /// the Portuguese system and nothing else.
+    ///
+    /// Defaults to Portugal, including for profiles saved before this
+    /// existed — that is the only tax system implemented, so assuming it
+    /// keeps a configured screen from vanishing.
+    var countryCode: String
     /// Organisations only: the registered name, what it does, its company
     /// number, and when it started trading.
     var legalName: String
@@ -132,6 +140,7 @@ struct Profile: Identifiable, Codable, Hashable {
          employmentStatus: EmploymentStatus = .unspecified,
          birthDate: Date? = nil,
          location: String = "",
+         countryCode: String = Countries.portugal,
          legalName: String = "",
          industry: String = "",
          registrationNumber: String = "",
@@ -153,6 +162,7 @@ struct Profile: Identifiable, Codable, Hashable {
         self.employmentStatus = employmentStatus
         self.birthDate = birthDate
         self.location = location
+        self.countryCode = countryCode
         self.legalName = legalName
         self.industry = industry
         self.registrationNumber = registrationNumber
@@ -182,6 +192,8 @@ struct Profile: Identifiable, Codable, Hashable {
                                                    forKey: .employmentStatus) ?? .unspecified
         birthDate = try box.decodeIfPresent(Date.self, forKey: .birthDate)
         location = try box.decodeIfPresent(String.self, forKey: .location) ?? ""
+        countryCode = try box.decodeIfPresent(String.self, forKey: .countryCode)
+            ?? Countries.portugal
         legalName = try box.decodeIfPresent(String.self, forKey: .legalName) ?? ""
         industry = try box.decodeIfPresent(String.self, forKey: .industry) ?? ""
         registrationNumber = try box.decodeIfPresent(String.self,

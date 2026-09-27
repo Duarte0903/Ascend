@@ -51,6 +51,9 @@ enum Theme {
         static let iconInline: CGFloat = 16    // table headers
         /// The narrow companion column beside a card.
         static let sidePanel: CGFloat = 330
+        /// A companion column with room for a chart beside its legend, or a
+        /// field with its caption on one line instead of three.
+        static let sidePanelWide: CGFloat = 396
         static let sheetNarrow: CGFloat = 480
         static let sheetWide: CGFloat = 620
 

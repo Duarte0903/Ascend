@@ -90,8 +90,9 @@ private func project() -> Projection {
 // MARK: - What counts as investing your income
 
 /// A contribution to an account that is neither usable cash nor savings — an
-/// employer-loaded food card, for instance — is not funded from your salary,
-/// so it must stay out of Total Invested and out of the leftover deduction.
+/// employer-loaded food card — is not investing, so it stays out of Total
+/// Invested. It is still funded from income, because income counts the
+/// allowance, so it does come off the leftover.
 @Test func totalInvestedIgnoresAccountsThatAreNeitherUsableNorSavings() {
     var input = WorkbookFixture.portfolio
     input.accounts = input.accounts.map { account in
@@ -102,7 +103,8 @@ private func project() -> Projection {
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
     #expect(abs(p.assumptions.totalInvestedPerMonth - 300) < tol)
-    #expect(abs(p.assumptions.leftoverPerMonth - 1200) < tol)
+    // 90 less than without the contribution: not invested, but still paid.
+    #expect(abs(p.assumptions.leftoverPerMonth - 1110) < tol)
 }
 
 /// The balance still grows by that contribution — it is only the funding
@@ -132,8 +134,9 @@ private func project() -> Projection {
     #expect(abs(p.assumptions.totalInvestedPerMonth - 300) < tol)
 }
 
-/// Flipping both flags off removes the contribution from the total, which
-/// raises the leftover by the same amount.
+/// Flipping both flags off removes the contribution from Total Invested. The
+/// leftover does not move: the money is still leaving the income, it is just
+/// no longer being called investing.
 @Test func clearingBothFlagsMovesContributionOutOfTheTotal() {
     var input = WorkbookFixture.portfolio
     input.accounts = input.accounts.map { account in
@@ -147,7 +150,7 @@ private func project() -> Projection {
     let p = ProjectionEngine.project(input, records: LedgerEngine.derive(input),
                                      from: WorkbookFixture.date(8, 8, 2026))
     #expect(abs(p.assumptions.totalInvestedPerMonth - 150) < tol)
-    #expect(abs(p.assumptions.leftoverPerMonth - 1350) < tol)
+    #expect(abs(p.assumptions.leftoverPerMonth - 1200) < tol)
 }
 
 @Test func projectingWithNoRecordsYieldsNoMonths() {
@@ -157,4 +160,36 @@ private func project() -> Projection {
                                      from: WorkbookFixture.date(8, 8, 2026))
     #expect(p.months.isEmpty)
     #expect(p.monthsToGoal == nil)
+}
+
+/// Income counts the meal allowance, so the account holding it is funded out
+/// of income like any other. The pairing is what matters: counting the
+/// allowance as income while funding the card from nowhere would grow net
+/// worth by the allowance twice over, every month.
+@Test func theMealCardIsFundedFromIncomeNotFromNowhere() {
+    var input = WorkbookFixture.portfolio
+    input.accounts = input.accounts.map { account in
+        var copy = account
+        if copy.id == WorkbookFixture.mealCardID { copy.monthlyContribution = 90 }
+        return copy
+    }
+    let records = LedgerEngine.derive(input)
+    let withCard = ProjectionEngine.project(input, records: records,
+                                            from: WorkbookFixture.date(8, 8, 2026))
+
+    var without = input
+    without.accounts = without.accounts.map { account in
+        var copy = account
+        if copy.id == WorkbookFixture.mealCardID { copy.monthlyContribution = 0 }
+        return copy
+    }
+    let bare = ProjectionEngine.project(without, records: records,
+                                        from: WorkbookFixture.date(8, 8, 2026))
+
+    // The contribution leaves the income, so the leftover drops by it.
+    #expect(abs((bare.assumptions.leftoverPerMonth
+                 - withCard.assumptions.leftoverPerMonth) - 90) < tol)
+    // And net worth is unchanged: the same money, in a different pocket.
+    #expect(abs((withCard.months.last?.netWorth ?? 0)
+                - (bare.months.last?.netWorth ?? 0)) < tol)
 }

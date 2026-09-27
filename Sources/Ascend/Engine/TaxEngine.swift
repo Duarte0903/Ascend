@@ -63,9 +63,6 @@ struct TaxYear: Codable, Sendable, Equatable {
     /// ordinary salary: taxed, and charged social security.
     var mealAllowanceCashLimit: Double
     var mealAllowanceCardLimit: Double
-    /// Portugal pays fourteen times a year: twelve months plus holiday and
-    /// Christmas subsidies. Getting this wrong misstates everything downstream.
-    var paymentsPerYear: Int
     /// How much the mainland scale is reduced by, per region.
     var regionalReduction: [String: Double]
 
@@ -223,8 +220,6 @@ struct TaxYear: Codable, Sendable, Equatable {
             Double.self, forKey: .mealAllowanceCashLimit) ?? fallback.mealAllowanceCashLimit
         mealAllowanceCardLimit = try box.decodeIfPresent(
             Double.self, forKey: .mealAllowanceCardLimit) ?? fallback.mealAllowanceCardLimit
-        paymentsPerYear = try box.decodeIfPresent(Int.self, forKey: .paymentsPerYear)
-            ?? fallback.paymentsPerYear
         regionalReduction = try box.decodeIfPresent([String: Double].self,
                                                     forKey: .regionalReduction)
             ?? fallback.regionalReduction
@@ -235,7 +230,7 @@ struct TaxYear: Codable, Sendable, Equatable {
          socialSupportIndex: Double, youngExemptionShares: [Double],
          youngExemptionCapMultiple: Double, creditPerDependent: Double,
          mealAllowanceCashLimit: Double, mealAllowanceCardLimit: Double,
-         paymentsPerYear: Int, regionalReduction: [String: Double]) {
+         regionalReduction: [String: Double]) {
         self.year = year
         self.brackets = brackets
         self.socialSecurityRate = socialSecurityRate
@@ -247,7 +242,6 @@ struct TaxYear: Codable, Sendable, Equatable {
         self.creditPerDependent = creditPerDependent
         self.mealAllowanceCashLimit = mealAllowanceCashLimit
         self.mealAllowanceCardLimit = mealAllowanceCardLimit
-        self.paymentsPerYear = paymentsPerYear
         self.regionalReduction = regionalReduction
     }
 
@@ -289,7 +283,6 @@ struct TaxYear: Codable, Sendable, Equatable {
         creditPerDependent: 600,
         mealAllowanceCashLimit: 6.15,
         mealAllowanceCardLimit: 10.46,
-        paymentsPerYear: 14,
         regionalReduction: ["mainland": 0, "madeira": 0.20, "azores": 0.30])
 }
 
@@ -320,10 +313,6 @@ struct TaxInput: Sendable, Equatable {
     /// Withholding is not the tax: it is a running instalment against it, and
     /// any difference comes back — or falls due — after the annual return.
     var withholdingRate: Double
-    /// Whether the allowance should count toward income that can be spent on
-    /// anything. Off by default: a meal card buys food and nothing else, so
-    /// treating it as free cash overstates what is actually available.
-    var mealAllowanceSpendable: Bool
     /// A part of the year's pay that carries no tax and no contributions —
     /// expenses reimbursed by the employer. Given as a yearly total, because
     /// it does not arrive on a schedule the way the meal allowance does.
@@ -332,9 +321,27 @@ struct TaxInput: Sendable, Equatable {
     /// package, so it is lifted out before anything is charged rather than
     /// added on top.
     var exemptExpenses: Double
-    /// Whether that money is the taxpayer's to spend. Off by default: money
-    /// for company expenses leaves again.
-    var exemptExpensesSpendable: Bool
+    /// How many times the salary is paid across the year.
+    ///
+    /// Twelve is the monthly salary alone — which is also the answer when the
+    /// subsídios are paid em duodécimos, since they are then already inside
+    /// each month. Thirteen is subsídio de Natal on top, fourteen is both.
+    ///
+    /// The subsídios are worked out from this rather than entered: each is one
+    /// month of pay, so `grossAnnual` divided by this gives the month and the
+    /// remainder is the subsídios. Ordinary pay either way — both carry full
+    /// IRS and the contribution, so none of this changes the tax.
+    var paymentsPerYear: Int
+    /// What each extra payment actually comes to, gross, when that is not a
+    /// full month — a first year is pro rata, and an allowance counted toward
+    /// one is not always counted toward the other, so the two can differ.
+    ///
+    /// Zero means a full month, worked out from `paymentsPerYear`. Christmas
+    /// pay is the thirteenth payment and holiday pay the fourteenth, so at
+    /// thirteen only the first applies. Both sit inside `grossAnnual`: raising
+    /// one lowers what an ordinary month is left holding.
+    var christmasPay: Double
+    var holidayPay: Double
     var table: TaxYear
 
     init(grossAnnual: Double,
@@ -346,9 +353,10 @@ struct TaxInput: Sendable, Equatable {
          mealAllowancePerDay: Double = 0,
          mealAllowanceDaysPerYear: Double = 0,
          mealAllowanceOnCard: Bool = true,
-         mealAllowanceSpendable: Bool = false,
          exemptExpenses: Double = 0,
-         exemptExpensesSpendable: Bool = false,
+         paymentsPerYear: Int = 12,
+         christmasPay: Double = 0,
+         holidayPay: Double = 0,
          withholdingAtSource: Bool = true,
          withholdingRate: Double = 0,
          table: TaxYear = .portugalDefaults) {
@@ -361,9 +369,10 @@ struct TaxInput: Sendable, Equatable {
         self.mealAllowancePerDay = mealAllowancePerDay
         self.mealAllowanceDaysPerYear = mealAllowanceDaysPerYear
         self.mealAllowanceOnCard = mealAllowanceOnCard
-        self.mealAllowanceSpendable = mealAllowanceSpendable
         self.exemptExpenses = exemptExpenses
-        self.exemptExpensesSpendable = exemptExpensesSpendable
+        self.paymentsPerYear = paymentsPerYear
+        self.christmasPay = christmasPay
+        self.holidayPay = holidayPay
         self.withholdingAtSource = withholdingAtSource
         self.withholdingRate = withholdingRate
         self.table = table
@@ -398,6 +407,27 @@ struct TaxAssessment: Sendable, Equatable {
     /// The reimbursed expenses inside the gross, which nothing is charged on.
     /// Counted in `totalGrossAnnual`, absent from `taxableIncome`.
     var exemptExpenses: Double
+    /// The subsídios together, gross: one month of pay for each payment
+    /// beyond the twelve. Ordinary pay, so already inside `taxableIncome` —
+    /// reported on its own only so a breakdown can say which part of the year
+    /// does not arrive monthly.
+    var subsidies: Double
+    /// How many of them there are, which is `paymentsPerYear` less twelve.
+    var subsidyCount: Int
+    /// What each comes to, gross: as entered, or a full month when not.
+    var christmasPay: Double
+    var holidayPay: Double
+    /// What the subsídios are worth once charged: the part of the year's net
+    /// that does not arrive in an ordinary month. Carved out of take-home,
+    /// never added to it.
+    var subsidiesNet: Double
+    /// What is charged on them, which is their share of the year's
+    /// contribution and tax.
+    var subsidiesCharged: Double
+    /// Salary less the subsídios: what an ordinary month is worth, gross.
+    var monthlySalaryGross: Double
+    /// How many times the salary is paid: twelve, plus one for each subsídio.
+    var paymentsPerYear: Int
     var specificDeduction: Double
     var taxableIncome: Double
     var slices: [BracketSlice]
@@ -409,8 +439,15 @@ struct TaxAssessment: Sendable, Equatable {
     /// Spread evenly across the calendar, which is the figure a monthly budget
     /// needs — not what lands in the bank in a month with a subsidy in it.
     var netMonthly: Double
-    /// What one of the year's payments is worth.
+    /// What one ordinary month's salary is worth, net. Neither the allowance
+    /// nor reimbursed expenses arrive with it, and the subsídios are extra
+    /// payments rather than part of it.
     var netPerPayment: Double
+    /// What one ordinary month's payslip comes to: the salary payment plus
+    /// that month's allowance, which is the figure a payslip's total líquido
+    /// shows. Smaller than `netMonthly`, which spreads the whole year —
+    /// subsídios included — over twelve.
+    var netPerOrdinaryMonth: Double
     /// What the employer holds back over the year at the withholding rate.
     var withheldAnnual: Double
     /// Withheld less the tax actually due: positive is a refund coming back,
@@ -420,16 +457,22 @@ struct TaxAssessment: Sendable, Equatable {
     /// rather than the assessment.
     var takeHomeAnnual: Double
     var takeHomeMonthly: Double
-    /// The single figure the rest of the app budgets on: what actually
-    /// reaches you over the year, less anything that cannot be spent freely.
+    /// The single figure the rest of the app budgets on: twelve ordinary
+    /// months of what actually reaches you, less anything that cannot be
+    /// spent freely.
     ///
-    /// Anything on screen calling itself spendable derives from this one, so
+    /// Not the year: holiday and Christmas pay are left out, because a
+    /// forecast built on them would show every month holding money that only
+    /// turns up twice. They are still real — `spendableNetAnnual` has them —
+    /// they are simply not what a monthly budget runs on.
+    ///
+    /// Anything on screen calling itself budgeted derives from this one, so
     /// two places cannot quote the same thing on different bases.
     var budgetAnnualIncome: Double
     var budgetMonthlyIncome: Double
-    /// Net less anything earmarked — the meal allowance on a card that only
-    /// buys food, and expenses that leave again — which is the figure a
-    /// budget should use.
+    /// Net less anything that leaves again — the reimbursed expenses — which
+    /// is the figure a budget should use. The meal allowance is in it: it
+    /// arrives, and whatever account holds it is funded out of this.
     var spendableNetAnnual: Double
     var spendableNetMonthly: Double
     /// Everything taken, over everything received. Social security counts: it
@@ -451,51 +494,89 @@ enum TaxEngine {
 
     static func assess(_ input: TaxInput) -> TaxAssessment {
         let table = input.table
-        let salary = max(0, input.grossAnnual)
+        let salary = Money.cents(max(0, input.grossAnnual))
         let meal = mealAllowance(input)
         // Reimbursed expenses are part of the salary the employer pays but
         // carry no tax and no contributions, so they come out before anything
         // is charged. Never more than the salary itself.
-        let expenses = min(max(0, input.exemptExpenses), salary)
-        let taxableSalary = salary - expenses
+        let expenses = Money.cents(min(max(0, input.exemptExpenses), salary))
+        let taxableSalary = Money.cents(salary - expenses)
+        // The pay is split into equal payments: twelve months, plus one for
+        // each subsídio. The subsídios are ordinary pay already inside the
+        // salary, separated out only to say what does not arrive monthly.
+        let payments = max(12, input.paymentsPerYear)
+        let subsidyCount = payments - 12
+        // A full month, which is what equal payments across the year give.
+        // Each extra payment is that unless a different amount was entered.
+        let fullMonth = Money.cents(taxableSalary / Double(payments))
+        let christmas = subsidyCount >= 1
+            ? (input.christmasPay > 0 ? Money.cents(input.christmasPay) : fullMonth) : 0
+        let holiday = subsidyCount >= 2
+            ? (input.holidayPay > 0 ? Money.cents(input.holidayPay) : fullMonth) : 0
+        // Anything beyond the two named ones is a full month apiece.
+        let further = Money.cents(fullMonth * Double(max(0, subsidyCount - 2)))
+        let subsidies = Money.cents(min(christmas + holiday + further, taxableSalary))
+        // Left alone, every payment is the same size, so the month is that
+        // size too — dividing the remainder instead would leave a full month
+        // and an extra payment a cent apart whenever the pay does not split
+        // evenly. Once an amount is entered the twelve months do share the
+        // rest, because that is what entering a different figure means.
+        let stated = input.christmasPay > 0 || input.holidayPay > 0
+        let monthlySalary = subsidyCount > 0 && !stated
+            ? fullMonth : Money.cents((taxableSalary - subsidies) / 12)
 
         // Only the part of the allowance above the daily limit is income; the
         // rest is invisible to both social security and IRS — as are the
         // expenses.
-        let employmentIncome = taxableSalary + meal.taxable
+        let employmentIncome = Money.cents(taxableSalary + meal.taxable)
 
-        let socialSecurity = employmentIncome * table.socialSecurityRate
+        let socialSecurity = Money.cents(employmentIncome * table.socialSecurityRate)
         let exempt = youngExemption(gross: employmentIncome, input: input)
 
         // The specific deduction is the greater of the fixed figure and what
         // was actually paid in social security.
-        let specific = max(table.specificDeduction, socialSecurity)
-        let taxable = max(0, employmentIncome - exempt - specific)
+        let specific = Money.cents(max(table.specificDeduction, socialSecurity))
+        let taxable = Money.cents(max(0, employmentIncome - exempt - specific))
 
         // Joint assessment taxes half the income and doubles the result, so a
         // couple is not pushed up the scale by pooling.
         let divisor: Double = input.jointTaxation ? 2 : 1
-        let slices = self.slices(on: taxable / divisor, brackets: table.brackets)
+        let slices = self.slices(on: Money.cents(taxable / divisor),
+                                 brackets: table.brackets)
+        // The slices are already whole cents, so doubling them for a couple
+        // cannot reintroduce a fraction.
         let scaleTax = slices.reduce(0) { $0 + $1.tax } * divisor
 
-        let reduced = scaleTax * (1 - table.reduction(for: input.region))
+        let reduced = Money.cents(scaleTax * (1 - table.reduction(for: input.region)))
         let solidarity = solidaritySurcharge(on: taxable, bands: table.solidarityBands)
 
-        let credits = Double(max(0, input.dependents)) * table.creditPerDependent
-            + max(0, input.otherCredits)
+        let credits = Money.cents(Double(max(0, input.dependents)) * table.creditPerDependent
+            + max(0, input.otherCredits))
         // Credits reduce the bill to zero and no further: they are not a refund.
-        let due = max(0, reduced + solidarity - credits)
+        let due = Money.cents(max(0, reduced + solidarity - credits))
 
         // The allowance is received in full: tax on the excess comes out of
         // the salary, not off the card.
-        let net = salary + meal.gross - socialSecurity - due
-        let received = salary + meal.gross
-        let payments = max(1, table.paymentsPerYear)
+        let net = Money.cents(salary + meal.gross - socialSecurity - due)
+        let received = Money.cents(salary + meal.gross)
         // Whatever cannot be spent freely comes off the net, each part on its
         // own switch.
-        let earmarked = (input.mealAllowanceSpendable ? 0 : meal.gross)
-            + (input.exemptExpensesSpendable ? 0 : expenses)
-        let spendable = net - earmarked
+        // The salary's net, split between the twelve months and the extra
+        // payments in the proportion of the pay each carries — which holds
+        // whether the extra payments were worked out or stated. Taking them
+        // off gross instead would subtract their contribution twice, since
+        // net has already been charged it.
+        let netSalary = Money.cents(net - meal.gross - expenses)
+        let ordinaryShare = taxableSalary > 0
+            ? (taxableSalary - subsidies) / taxableSalary : 1
+        let ordinaryMonths = Money.cents(netSalary * ordinaryShare)
+
+        // The allowance is money that arrives, so it counts: Projections
+        // funds the card's own account out of it rather than from nowhere.
+        // The reimbursed expenses do not — they are absent from take-home,
+        // and counting them would put the budget above what actually arrives.
+        let earmarked = Money.cents(expenses)
+        let spendable = Money.cents(net - earmarked)
 
         // Withholding runs on the same income IRS does — the exempt part of
         // the allowance is invisible to it too.
@@ -507,10 +588,15 @@ enum TaxEngine {
         if !input.withholdingAtSource {
             withheld = 0
         } else {
-            withheld = rate > 0 ? employmentIncome * rate : due
+            withheld = rate > 0 ? Money.cents(employmentIncome * rate) : due
         }
-        let takeHome = salary + meal.gross - socialSecurity - withheld
-        let spendableTakeHome = takeHome - earmarked
+        let takeHome = Money.cents(salary + meal.gross - socialSecurity - withheld)
+        // What a budget should run on: an ordinary month, not the year over
+        // twelve. The extra payments are two windfalls — real money, but
+        // spreading them would show every month holding more than it does.
+        // The allowance is in it, because the card is credited every month.
+        let takeHomeSalary = Money.cents(takeHome - meal.gross - expenses)
+        let budget = Money.cents(Money.cents(takeHomeSalary * ordinaryShare) + meal.gross)
 
         return TaxAssessment(
             grossAnnual: salary,
@@ -521,30 +607,45 @@ enum TaxEngine {
             socialSecurity: socialSecurity,
             exemptIncome: exempt,
             exemptExpenses: expenses,
+            subsidies: subsidies,
+            subsidyCount: subsidyCount,
+            christmasPay: christmas,
+            holidayPay: holiday,
+            subsidiesNet: Money.cents(netSalary - ordinaryMonths),
+            subsidiesCharged: Money.cents(subsidies - (netSalary - ordinaryMonths)),
+            monthlySalaryGross: monthlySalary,
+            paymentsPerYear: payments,
             specificDeduction: specific,
             taxableIncome: taxable,
             // Reported undivided, so the breakdown adds up to the tax charged.
             slices: input.jointTaxation ? slices.map { doubled($0) } : slices,
             taxBeforeCredits: reduced,
             solidaritySurcharge: solidarity,
-            credits: min(credits, reduced + solidarity),
+            credits: Money.cents(min(credits, reduced + solidarity)),
             taxDue: due,
             netAnnual: net,
-            netMonthly: net / 12,
-            // The allowance is paid per working day, not with the salary, so a
-            // payment is worth the salary part alone.
-            netPerPayment: (net - meal.gross) / Double(payments),
+            netMonthly: Money.cents(net / 12),
+            // An ordinary month: the salary net of everything charged on it,
+            // apportioned between the twelve months and the subsídios, then
+            // spread over the twelve. Taking the subsídios off gross instead
+            // would subtract their contribution twice, since net has already
+            // been charged it. The allowance is paid per working day and
+            // expenses are reimbursed separately, so neither is in it.
+            netPerPayment: Money.cents(ordinaryMonths / 12),
+            // The allowance is credited every month, whatever the salary's
+            // own rhythm, so one month's payslip carries one month of it.
+            netPerOrdinaryMonth: Money.cents(ordinaryMonths / 12 + meal.gross / 12),
             withheldAnnual: withheld,
-            withholdingBalance: withheld - due,
+            withholdingBalance: Money.cents(withheld - due),
             takeHomeAnnual: takeHome,
-            takeHomeMonthly: takeHome / 12,
+            takeHomeMonthly: Money.cents(takeHome / 12),
             // Always what actually arrives: with withholding on and no rate
             // given this is the assessment anyway, and with it off the tax has
             // not been taken yet.
-            budgetAnnualIncome: spendableTakeHome,
-            budgetMonthlyIncome: spendableTakeHome / 12,
+            budgetAnnualIncome: budget,
+            budgetMonthlyIncome: Money.cents(budget / 12),
             spendableNetAnnual: spendable,
-            spendableNetMonthly: spendable / 12,
+            spendableNetMonthly: Money.cents(spendable / 12),
             effectiveRate: received > 0 ? (socialSecurity + due) / received : 0,
             marginalRate: marginalRate(on: taxable / divisor, input: input))
     }
@@ -566,7 +667,8 @@ enum TaxEngine {
         // come back through here.
         let without = assess(bare)
 
-        let cost = (with.socialSecurity + with.taxDue) - (without.socialSecurity + without.taxDue)
+        let cost = Money.cents((with.socialSecurity + with.taxDue)
+            - (without.socialSecurity + without.taxDue))
         return (amount: cost,
                 shareOfAllowance: cost / with.mealAllowanceGross,
                 shareOfExcess: with.mealAllowanceTaxable > 0
@@ -585,9 +687,9 @@ enum TaxEngine {
         // multiplied up. Comparing yearly totals against it would be wrong.
         let limit = input.table.mealAllowanceLimit(onCard: input.mealAllowanceOnCard)
         let exemptPerDay = min(perDay, limit)
-        return (gross: perDay * days,
-                exempt: exemptPerDay * days,
-                taxable: (perDay - exemptPerDay) * days)
+        return (gross: Money.cents(perDay * days),
+                exempt: Money.cents(exemptPerDay * days),
+                taxable: Money.cents((perDay - exemptPerDay) * days))
     }
 
     /// The share of income the young-taxpayer scheme exempts this year, capped
@@ -597,7 +699,7 @@ enum TaxEngine {
               year >= 1, year <= input.table.youngExemptionShares.count else { return 0 }
         let share = input.table.youngExemptionShares[year - 1]
         let cap = input.table.youngExemptionCapMultiple * input.table.socialSupportIndex
-        return min(gross * share, cap)
+        return Money.cents(min(gross * share, cap))
     }
 
     /// Walks the scale, taxing each band on the part of the income that falls
@@ -613,8 +715,10 @@ enum TaxEngine {
             result.append(BracketSlice(lowerLimit: lower,
                                        upperLimit: bracket.upperLimit,
                                        rate: bracket.rate,
-                                       amountTaxed: amount,
-                                       tax: amount * bracket.rate))
+                                       amountTaxed: Money.cents(amount),
+                                       // Rounded per band, so the breakdown on
+                                       // screen adds up to the tax charged.
+                                       tax: Money.cents(amount * bracket.rate)))
             lower = ceiling
         }
         return result
@@ -636,9 +740,9 @@ enum TaxEngine {
         for (index, band) in sorted.enumerated() {
             guard income > band.floor else { break }
             let ceiling = index + 1 < sorted.count ? sorted[index + 1].floor : income
-            total += (min(income, ceiling) - band.floor) * band.rate
+            total += Money.cents((min(income, ceiling) - band.floor) * band.rate)
         }
-        return total
+        return Money.cents(total)
     }
 
     private static func marginalRate(on income: Double, input: TaxInput) -> Double {

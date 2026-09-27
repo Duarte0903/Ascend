@@ -29,29 +29,13 @@ struct TaxView: View {
     private var table: TaxYear { settings.taxTable }
 
     private var assessment: TaxAssessment {
-        TaxEngine.assess(settings.taxInput
-                         ?? TaxInput(grossAnnual: settings.salaryExcludingMealAllowance,
-                                     region: settings.taxRegion,
-                                     dependents: settings.taxDependents,
-                                     jointTaxation: settings.taxJointAssessment,
-                                     youngTaxpayerYear: settings.taxYoungTaxpayerYear > 0
-                                         ? settings.taxYoungTaxpayerYear : nil,
-                                     otherCredits: settings.taxOtherCredits,
-                                     mealAllowancePerDay: settings.mealAllowancePerDay,
-                                     mealAllowanceDaysPerYear:
-                                        Double(settings.mealAllowanceDaysPerYear),
-                                     mealAllowanceOnCard: settings.mealAllowanceOnCard,
-                                     mealAllowanceSpendable: settings.mealAllowanceSpendable,
-                                     exemptExpenses: settings.taxExemptExpenses,
-                                     exemptExpensesSpendable:
-                                        settings.taxExemptExpensesSpendable,
-                                     withholdingAtSource: settings.taxWithholdingAtSource,
-                                     withholdingRate: settings.taxWithholdingRate,
-                                     table: table))
+        // Always the entered situation, handoff or not.
+        TaxEngine.assess(settings.taxAssessmentInput
+                         ?? TaxInput(grossAnnual: 0, table: table))
     }
 
     private var mealCost: (amount: Double, shareOfAllowance: Double, shareOfExcess: Double) {
-        TaxEngine.mealAllowanceCost(settings.taxInput
+        TaxEngine.mealAllowanceCost(settings.taxAssessmentInput
                                     ?? TaxInput(grossAnnual: settings.grossAnnualIncome,
                                                 mealAllowancePerDay: settings.mealAllowancePerDay,
                                                 mealAllowanceDaysPerYear:
@@ -73,12 +57,24 @@ struct TaxView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
 
+            // The donut is a fixed 148pt wheel beside a short legend, so it
+            // is given the width it actually needs and the bands take the
+            // rest — a full row left most of it empty.
             HStack(alignment: .top, spacing: Theme.gap) {
                 bands
                 split
+                    .frame(width: Theme.Size.sidePanelWide)
             }
             .fixedSize(horizontal: false, vertical: true)
-            rateTable.fillsHeight(minimum: 200)
+
+            // Extra payments is four rows: a companion column beside the rate
+            // table, rather than a card stretched to match something taller.
+            HStack(alignment: .top, spacing: Theme.gap) {
+                rateTable
+                extraPayments
+                    .frame(width: Theme.Size.sidePanelWide)
+            }
+            .fillsHeight(minimum: 200)
         }
         .toolbar {
             Button("What everything means", systemImage: "info.circle") {
@@ -98,9 +94,13 @@ struct TaxView: View {
 
     private var summary: some View {
         HStack(spacing: Theme.gap) {
-            MetricTile(title: "Net per month",
-                       value: Money.currency(assessment.budgetMonthlyIncome),
-                       caption: spendableCaption)
+            // The one figure on this screen that can be checked against a
+            // piece of paper. What Projections is handed is a different and
+            // smaller number, so it is stated in the breakdown where there is
+            // room to say why, rather than competing for the headline.
+            MetricTile(title: "Take-home a month",
+                       value: Money.currency(assessment.netPerOrdinaryMonth, decimals: 2),
+                       caption: takeHomeCaption)
             MetricTile(title: "Effective rate", value: Money.percent(assessment.effectiveRate),
                        caption: "Tax and social security, over gross")
             MetricTile(title: "Marginal rate", value: Money.percent(assessment.marginalRate),
@@ -140,16 +140,30 @@ struct TaxView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                // No divider: the switch belongs to the amount above it, and
-                // is only worth asking once there is something to spend.
-                if settings.taxExemptExpenses > 0 {
-                    row("Untaxed is spendable") {
-                        Toggle("", isOn: Binding(
-                            get: { settings.taxExemptExpensesSpendable },
-                            set: { settings.taxExemptExpensesSpendable = $0; save() }))
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
+                row("Payments a year") {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Picker("", selection: Binding(
+                            get: { paymentsSelection },
+                            set: { choose(payments: $0) })) {
+                            ForEach(TaxView.paymentPresets, id: \.self) { count in
+                                Text(TaxView.paymentLabel(count)).tag(count)
+                            }
+                            Divider()
+                            Text("Another number…").tag(TaxView.customPaymentsTag)
+                        }
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(width: Theme.Size.picker)
+                        if isCustomPayments {
+                            IntField(value: Binding(
+                                get: { settings.taxPaymentsPerYear },
+                                set: { settings.taxPaymentsPerYear = max(12, $0); save() }),
+                                     range: 12...24, width: Theme.Size.fieldSmall)
+                        }
+                        Text(subsidyCaption)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.ftInkTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Divider()
@@ -169,7 +183,6 @@ struct TaxView: View {
                         set: { settings.taxDependents = max(0, $0); save() }),
                              range: 0...20, width: Theme.Size.fieldSmall)
                 }
-                Divider()
                 row("Assessed jointly") {
                     Toggle("", isOn: Binding(
                         get: { settings.taxJointAssessment },
@@ -284,7 +297,6 @@ struct TaxView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Divider()
                 row("Paid onto a card") {
                     VStack(alignment: .leading, spacing: 3) {
                         Toggle("", isOn: Binding(
@@ -299,7 +311,6 @@ struct TaxView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Divider()
                 row("Vacation days") {
                     HStack(spacing: 8) {
                         IntField(value: Binding(
@@ -316,13 +327,12 @@ struct TaxView: View {
                             .foregroundStyle(Color.ftInkTertiary)
                     }
                 }
-                Divider()
                 row("Days paid") {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 8) {
                             DerivedText(text: "\(settings.mealAllowanceDaysPerYear)",
                                         width: Theme.Size.fieldSmall)
-                            Text("= \(Money.currency(assessment.mealAllowanceGross / 12)) a month")
+                            Text("= \(Money.currency(assessment.mealAllowanceGross / 12, decimals: 2)) a month")
                                 .font(.system(size: 11))
                                 .foregroundStyle(Color.ftInkTertiary)
                         }
@@ -332,24 +342,12 @@ struct TaxView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Divider()
                 row("Pin days paid") {
                     VStack(alignment: .leading, spacing: 3) {
                         IntField(value: Binding(
                             get: { settings.mealAllowanceDaysOverride },
                             set: { settings.mealAllowanceDaysOverride = max(0, $0); save() }),
                                  range: 0...366, width: Theme.Size.fieldSmall)
-                    }
-                }
-                Divider()
-                row("Allowance is spendable") {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Toggle("", isOn: Binding(
-                            get: { settings.mealAllowanceSpendable },
-                            set: { settings.mealAllowanceSpendable = $0; save() }))
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
                     }
                 }
                 Divider()
@@ -391,7 +389,7 @@ struct TaxView: View {
         guard settings.grossAnnualIncome > 0 else {
             return "Set a gross salary above and Projections will use what is left of it."
         }
-        return "Projections uses \(Money.currency(assessment.budgetMonthlyIncome)) a month — what is left after tax and social security, with anything that cannot be spent freely held back."
+        return "Projections uses \(Money.currency(assessment.budgetMonthlyIncome, decimals: 2)) a month — what is left after tax and social security, with anything that cannot be spent freely held back."
     }
 
     /// A flat withholding rate is charged whether or not relief applies, so
@@ -426,12 +424,53 @@ struct TaxView: View {
         guard entered > 0 else { return "Food allowance included." }
         let meal = settings.mealAllowanceAnnual
         guard meal > 0 else { return "No food allowance set, so all of it is salary." }
-        let salary = settings.salaryExcludingMealAllowance
-        let expenses = min(max(0, settings.taxExemptExpenses), salary)
-        guard expenses > 0 else {
-            return "\(Money.currency(meal)) allowance, \(Money.currency(salary)) salary."
+        let a = assessment
+        var parts = ["\(Money.currency(meal, decimals: 2)) allowance"]
+        if a.exemptExpenses > 0 { parts.append("\(Money.currency(a.exemptExpenses, decimals: 2)) untaxed") }
+        if a.subsidies > 0 { parts.append("\(Money.currency(a.subsidies, decimals: 2)) extra pay") }
+        let ordinary = a.grossAnnual - a.exemptExpenses - a.subsidies
+        parts.append("\(Money.currency(ordinary, decimals: 2)) salary")
+        return parts.joined(separator: ", ") + "."
+    }
+
+    /// The counts people actually have, plus a way out for anything else.
+    static let paymentPresets = [12, 13, 14]
+    /// Outside the range the field accepts, so it can never be a real count.
+    static let customPaymentsTag = -1
+
+    static func paymentLabel(_ count: Int) -> String {
+        switch count {
+        case 12: "12 — monthly only"
+        case 13: "13 — with Christmas pay"
+        case 14: "14 — holiday and Christmas pay"
+        default: "\(count)"
         }
-        return "\(Money.currency(meal)) allowance, \(Money.currency(expenses)) untaxed, \(Money.currency(salary - expenses)) taxed salary."
+    }
+
+    private var isCustomPayments: Bool {
+        !TaxView.paymentPresets.contains(settings.taxPaymentsPerYear)
+    }
+
+    private var paymentsSelection: Int {
+        isCustomPayments ? TaxView.customPaymentsTag : settings.taxPaymentsPerYear
+    }
+
+    private func choose(payments: Int) {
+        // Picking "Another number…" starts from something that is not a
+        // preset, so the field appears with a sensible value already in it.
+        settings.taxPaymentsPerYear = payments == TaxView.customPaymentsTag ? 15 : payments
+        save()
+    }
+
+    /// Says what the choice implies: the subsídios and what an ordinary month
+    /// is left holding, neither of which is typed.
+    private var subsidyCaption: String {
+        let assessment = self.assessment
+        guard assessment.subsidyCount > 0 else {
+            return "Twelve monthly payments. Choose this too when holiday and Christmas pay are spread across the months."
+        }
+        let each = Money.currency(assessment.monthlySalaryGross, decimals: 2)
+        return "\(assessment.subsidyCount) extra payments of \(each). An ordinary month is \(each) gross."
     }
 
     /// Says what the figure is for and, when it is impossible, why.
@@ -440,9 +479,9 @@ struct TaxView: View {
             return "Expenses paid with your salary that carry no tax."
         }
         if exemptExpensesOverruns {
-            return "More than the salary itself — only \(Money.currency(settings.salaryExcludingMealAllowance)) can be untaxed."
+            return "More than the salary itself — only \(Money.currency(settings.salaryExcludingMealAllowance, decimals: 2)) can be untaxed."
         }
-        let monthly = Money.currency(settings.taxExemptExpenses / 12)
+        let monthly = Money.currency(settings.taxExemptExpenses / 12, decimals: 2)
         return "\(monthly) a month on average, inside gross pay. No tax, no social security."
     }
 
@@ -505,24 +544,55 @@ struct TaxView: View {
         return "\(table.year): \(weekdays) weekdays − \(holidays) national holidays on weekdays − \(settings.mealAllowanceVacationDays) vacation − \(settings.mealAllowanceExtraHolidays) municipal."
     }
 
+    /// One extra payment: the worked-out amount until something else is
+    /// typed, so the field is never blank and never has to be filled in to be
+    /// right. `entered` is the stored figure, which is 0 while it is derived.
+    @ViewBuilder
+    private func subsidyRow(_ label: String, value: Double, entered: Double,
+                            set: @escaping (Double) -> Void) -> some View {
+        row(label) {
+            VStack(alignment: .leading, spacing: 3) {
+                MoneyField(value: Binding(get: { value }, set: set),
+                           decimals: 2, width: Theme.Size.picker, suffix: Money.symbol)
+                Text(entered > 0
+                     ? "As entered — 0 for a full month"
+                     : "A full month — type what you receive")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.ftInkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The headline says what it is measured after, and over what period —
+    /// the two things that made four near-identical figures readable as one.
+    private var takeHomeCaption: String {
+        let basis = settings.taxWithholdingAtSource
+            ? "After tax and social security" : "Tax not yet taken"
+        guard assessment.subsidyCount > 0 else { return "\(basis), every month" }
+        return "\(basis). \(assessment.subsidyCount) extra payments arrive on top"
+    }
+
     private var spendableCaption: String {
         let basis = settings.taxWithholdingAtSource
             ? "After tax and social security" : "Tax not yet taken"
         guard !heldBack.isEmpty else { return "\(basis), the year over twelve" }
-        return "\(basis), without \(heldBack.joined(separator: " or "))"
+        return "\(basis), the year over twelve, without \(heldBack.joined(separator: " or "))"
     }
 
     /// What is paid but cannot be spent, named so one caption covers any
-    /// combination of the two switches.
+    /// Says what a projected month is and is not built on, since it is an
+    /// ordinary month rather than the year divided up.
+    private var projectionsBasis: String {
+        var parts = ["an ordinary month"]
+        if assessment.subsidyCount > 0 { parts.append("no extra payments") }
+        if !heldBack.isEmpty { parts.append("no \(heldBack.joined(separator: " or "))") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// present. The allowance is not among them: it arrives and it counts.
     private var heldBack: [String] {
-        var parts: [String] = []
-        if !settings.mealAllowanceSpendable, assessment.mealAllowanceGross > 0 {
-            parts.append("the food allowance")
-        }
-        if !settings.taxExemptExpensesSpendable, assessment.exemptExpenses > 0 {
-            parts.append("expenses")
-        }
-        return parts
+        assessment.exemptExpenses > 0 ? ["expenses"] : []
     }
 
     /// Names the disclosure after what it holds, and says when something is
@@ -601,7 +671,7 @@ struct TaxView: View {
         let share = Money.percent(table.youngExemptionShares[year - 1])
         let cap = table.youngExemptionCapMultiple * table.socialSupportIndex
         let tail = skipped.isEmpty ? "" : " Last claim falls in \(final)."
-        return "\(table.year) is year \(year) of \(length): \(share) exempt, capped at \(Money.currency(cap)).\(tail)"
+        return "\(table.year) is year \(year) of \(length): \(share) exempt, capped at \(Money.currency(cap, decimals: 2)).\(tail)"
     }
 
     // MARK: - Breakdown
@@ -672,15 +742,74 @@ struct TaxView: View {
                               detail: assessment.withholdingBalance > 0
                                   ? "before the refund" : "before the balance falls due")
                 }
-                Divider()
-                amountRow("Per salary payment", assessment.netPerPayment,
-                          detail: "\(table.paymentsPerYear) a year")
-                if assessment.mealAllowanceGross > 0 || assessment.exemptExpenses > 0 {
+                if assessment.subsidies > 0 {
                     Divider()
-                    amountRow("Spendable for the year", assessment.budgetAnnualIncome,
-                              detail: heldBack.isEmpty
-                                  ? "all of it" : "less \(heldBack.joined(separator: " and "))",
-                              emphasised: true)
+                    amountRow("Extra payments", assessment.subsidies,
+                              detail: "holiday and Christmas pay, taxed as salary")
+                }
+                Divider()
+                amountRow("Take-home a month", assessment.netPerOrdinaryMonth,
+                          detail: "what one payslip totals", emphasised: true)
+                amountRow("— to your bank", assessment.netPerPayment)
+                if assessment.mealAllowanceGross > 0 {
+                    amountRow("— to the meal card",
+                              Money.cents(assessment.mealAllowanceGross / 12))
+                }
+                Divider()
+                amountRow("Counted in Projections", assessment.budgetMonthlyIncome,
+                          detail: projectionsBasis)
+            }
+        }
+        .fillingHeight()
+    }
+
+    // MARK: - Extra payments
+
+    /// Holiday and Christmas pay on their own, because they are the reason a
+    /// yearly figure and a payslip disagree — and because nothing else on the
+    /// screen says what one of them is actually worth in the hand.
+    private var extraPayments: some View {
+        CardSection("Extra payments",
+                    subtitle: "Holiday and Christmas pay, beyond the twelve months") {
+            if assessment.subsidyCount == 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Paid twelve times a year.")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Color.ftInk)
+                    Text("Set Payments a year to 13 or 14 if holiday and Christmas pay arrive separately. Twelve is right when they are spread across the months.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.ftInkTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Grid(alignment: .leadingFirstTextBaseline,
+                     horizontalSpacing: 24, verticalSpacing: 11) {
+                    // Each on its own: a first year pro-rates them by when you
+                    // started, so the two are rarely equal.
+                    if assessment.subsidyCount >= 2 {
+                        subsidyRow("Holiday pay",
+                                   value: assessment.holidayPay,
+                                   entered: settings.taxHolidayPay) {
+                            settings.taxHolidayPay = max(0, $0); save()
+                        }
+                    }
+                    subsidyRow("Christmas pay",
+                               value: assessment.christmasPay,
+                               entered: settings.taxChristmasPay) {
+                        settings.taxChristmasPay = max(0, $0); save()
+                    }
+                    Divider()
+                    amountRow("Together", assessment.subsidies)
+                    Divider()
+                    amountRow("Social security", -assessment.subsidiesCharged,
+                              detail: "and IRS, at your rate", relief: true)
+                    Divider()
+                    amountRow("Reaches you", assessment.subsidiesNet, emphasised: true)
+                    Divider()
+                    amountRow("Spread over a year",
+                              Money.cents(assessment.subsidiesNet / 12),
+                              detail: "a month, on top of take-home")
                 }
             }
         }
@@ -737,10 +866,10 @@ struct TaxView: View {
                                 .font(.system(size: 12.5,
                                               weight: isCurrent ? .semibold : .regular))
                                 .monospacedDigit()
-                            Text(Money.currency(slice.amountTaxed))
+                            Text(Money.currency(slice.amountTaxed, decimals: 2))
                                 .font(.system(size: 12.5)).monospacedDigit()
                                 .foregroundStyle(Color.ftInkSecondary)
-                            Text(Money.currency(slice.tax))
+                            Text(Money.currency(slice.tax, decimals: 2))
                                 .font(.system(size: 12.5, weight: .medium)).monospacedDigit()
                         }
                     }
@@ -767,7 +896,7 @@ struct TaxView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("You are in band \(position) of \(total)")
                     .font(.system(size: 13, weight: .semibold))
-                Text("\(Money.percent(rate)) on the next euro earned, \(Money.percent(averageOnTaxable)) across the \(Money.currency(assessment.taxableIncome)) that is taxable — \(Money.currency(assessment.slices.reduce(0) { $0 + $1.tax })) in all.")
+                Text("\(Money.percent(rate)) on the next euro earned, \(Money.percent(averageOnTaxable)) across the \(Money.currency(assessment.taxableIncome, decimals: 2)) that is taxable — \(Money.currency(assessment.slices.reduce(0) { $0 + $1.tax }, decimals: 2)) in all.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Color.ftInkTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -841,21 +970,26 @@ struct TaxView: View {
     /// whatever the deductions leave.
     private var grossSlices: [GrossSlice] {
         var slices: [GrossSlice] = []
-        if assessment.spendableNetAnnual > 0 {
+        // Take-home less the extra payments, which get their own wedge below.
+        // Splitting it keeps the wedges adding up to gross; adding one on top
+        // would count the same money twice.
+        let monthly = assessment.spendableNetAnnual - assessment.subsidiesNet
+        if monthly > 0 {
             slices.append(GrossSlice(name: "Take-home",
-                                     amount: assessment.spendableNetAnnual,
+                                     amount: monthly,
                                      color: .ftPositive))
         }
-        // Only its own wedge when it is held back; counted as spendable it is
-        // already inside take-home.
-        if !settings.mealAllowanceSpendable, assessment.mealAllowanceGross > 0 {
+        if assessment.subsidiesNet > 0 {
+            slices.append(GrossSlice(name: "Extra payments",
+                                     amount: assessment.subsidiesNet,
+                                     color: Color(hex: "#3E7C59")))
+        }
+        if assessment.mealAllowanceGross > 0 {
             slices.append(GrossSlice(name: "Meal card",
                                      amount: assessment.mealAllowanceGross,
                                      color: .ftAccent))
         }
-        // Same rule as the meal card: its own wedge only when it is held
-        // back, since spendable it is already inside take-home.
-        if !settings.taxExemptExpensesSpendable, assessment.exemptExpenses > 0 {
+        if assessment.exemptExpenses > 0 {
             slices.append(GrossSlice(name: "Untaxed",
                                      amount: assessment.exemptExpenses,
                                      color: Color(hex: "#5B6C9B")))
@@ -927,7 +1061,7 @@ struct TaxView: View {
                         Text(slice.name)
                             .font(.system(size: 12))
                             .foregroundStyle(Color.ftInk)
-                        Text("\(Money.currency(slice.amount)) · \(Money.percent(share(of: slice)))")
+                        Text("\(Money.currency(slice.amount, decimals: 2)) · \(Money.percent(share(of: slice)))")
                             .font(.system(size: 11))
                             .monospacedDigit()
                             .foregroundStyle(Color.ftInkTertiary)
@@ -985,7 +1119,7 @@ struct TaxView: View {
                     Divider()
                     row("Specific deduction") {
                         VStack(alignment: .leading, spacing: 3) {
-                            DerivedText(text: Money.currency(table.specificDeduction),
+                            DerivedText(text: Money.currency(table.specificDeduction, decimals: 2),
                                         width: Theme.Size.picker)
                         }
                     }
@@ -1028,13 +1162,7 @@ struct TaxView: View {
                                 })
                         }
                     }
-                    Divider()
-                    row("Payments a year") {
-                        IntField(value: Binding(
-                            get: { table.paymentsPerYear },
-                            set: { new in editTable { $0.paymentsPerYear = new } }),
-                                 range: 1...14, width: Theme.Size.fieldSmall)
-                    }
+
                 }
 
                 Divider()
@@ -1059,6 +1187,7 @@ struct TaxView: View {
                 }
             }
         }
+        .fillingHeight()
     }
 
     /// The scale at a glance, so the card says something without listing it.
@@ -1141,7 +1270,7 @@ struct TaxView: View {
             .gridColumnAlignment(.leading)
 
             // A rounded-away figure is zero, not minus zero.
-            Text(Money.currency(abs(amount) < 0.005 ? 0 : amount))
+            Text(Money.currency(abs(amount) < 0.005 ? 0 : amount, decimals: 2))
                 .font(.system(size: 13, weight: emphasised ? .semibold : .regular))
                 .monospacedDigit()
                 .foregroundStyle(amountColor(amount, relief: relief))

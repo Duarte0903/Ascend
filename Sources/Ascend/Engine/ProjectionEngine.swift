@@ -62,11 +62,10 @@ enum ProjectionEngine {
         // Two different sums, and conflating them was a bug.
         //
         // This one balances the money: every contribution paid out of your
-        // salary has to leave the salary, or the leftover is overstated. An
-        // account that holds neither spendable nor saved money — a food-only
-        // card — is funded from outside the salary, so it is left out.
-        let fundedFromIncome = accounts.filter { $0.includeInUsable || $0.countsAsSavings }
-        let contributionsFromIncome = fundedFromIncome
+        // income has to leave it, or the leftover is overstated. All of them
+        // do, the meal card included — income counts the allowance, so the
+        // card's account is funded from it like any other.
+        let contributionsFromIncome = accounts
             .reduce(0) { $0 + $1.monthlyContribution }
 
         // And this one is what "invested" means to a reader: what goes into

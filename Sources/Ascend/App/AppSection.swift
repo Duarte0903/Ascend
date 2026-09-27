@@ -15,24 +15,27 @@ enum AppSection: String, CaseIterable, Identifiable {
         ("Setup", [.accounts, .profile]),
     ]
 
-    /// Whether this screen makes sense for the kind of profile that is open.
+    /// Whether this screen makes sense for the profile that is open.
     ///
     /// Tax estimates personal income tax on a salary, which an organisation
     /// does not have — companies are assessed under an entirely different
     /// regime, so showing them a salary calculator would be worse than showing
-    /// them nothing.
-    func isAvailable(to kind: ProfileKind) -> Bool {
+    /// them nothing. It also models the Portuguese system and only that, so it
+    /// is offered to a person in Portugal and nobody else. Everything else is
+    /// universal: balances and forecasts do not care where you live.
+    func isAvailable(to kind: ProfileKind, in countryCode: String) -> Bool {
         switch self {
-        case .tax: kind == .person
+        case .tax: kind == .person && countryCode == Countries.portugal
         default: true
         }
     }
 
     /// The sidebar for a given kind of profile. A group that loses all of its
     /// items disappears rather than leaving an empty heading.
-    static func groups(for kind: ProfileKind) -> [(label: String, items: [AppSection])] {
+    static func groups(for kind: ProfileKind,
+                       in countryCode: String) -> [(label: String, items: [AppSection])] {
         allGroups.compactMap { group in
-            let items = group.items.filter { $0.isAvailable(to: kind) }
+            let items = group.items.filter { $0.isAvailable(to: kind, in: countryCode) }
             return items.isEmpty ? nil : (label: group.label, items: items)
         }
     }
