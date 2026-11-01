@@ -12,6 +12,13 @@ final class AppSettings {
     /// What interest is taxed at when it is credited. Applied to accounts that
     /// pay on a schedule; gains only taxed on sale are left alone, since the
     /// bill depends on when you sell rather than on the year passing.
+    /// The IRS rate side-hustle profit meets, used only when the Tax screen
+    /// is not set up. With it on, the marginal rate from there wins: the
+    /// profit stacks on the salary, so it is taxed at the top of the pile.
+    var sideHustleIRSRate: Double = 0.235
+    /// Independent-worker contributions. Not the employee rate — a different
+    /// figure on a different base.
+    var sideHustleContributionRate: Double = 0.214
     var investmentTaxRate: Double = 0.28
 
     // MARK: - Tax

@@ -5,6 +5,18 @@
     <link>https://github.com/Duarte0903/Ascend</link>
     <description>Ascend releases</description>
     <item>
+      <title>1.3</title>
+      <pubDate>Sun, 01 Nov 2026 00:06:49 +0000</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>1.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[New Side hustles screen: record what you invoice for work on the side, mark each invoice paid or unpaid, and see what to set aside. Models the Portuguese regime simplificado — a coefficient on what you receive, IRS at your marginal rate, IRS Jovem across categories A and B, and the independent-worker contribution exemption while you are also employed.]]></description>
+      <enclosure url="https://github.com/Duarte0903/Ascend/releases/download/v1.3/Ascend-1.3.zip"
+                 length="5980571"
+                 type="application/octet-stream"
+                 sparkle:edSignature="z1zft6LBsgKBEXLHuqqC5Rrknv6xunb8A6+lrKsEHdgepWS8Xt0nzHa3IW+m+wsuhDdz9Y7Mzu/EiIgFFmIfDA=="/>
+    </item>
+    <item>
       <title>1.2</title>
       <pubDate>Sun, 27 Sep 2026 16:40:39 +0000</pubDate>
       <sparkle:version>3</sparkle:version>

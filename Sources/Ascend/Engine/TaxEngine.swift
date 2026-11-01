@@ -483,6 +483,10 @@ struct TaxAssessment: Sendable, Equatable {
     /// whole salary with no ceiling. Comparable with `effectiveRate`, which
     /// counts the same things.
     var marginalRate: Double
+    /// The same, less social security: IRS alone. What side-hustle profit
+    /// meets, since that income carries contributions of its own at a
+    /// different rate rather than the employee one.
+    var marginalIRSRate: Double
 }
 
 /// Estimates Portuguese personal income tax on employment income.
@@ -647,7 +651,9 @@ enum TaxEngine {
             spendableNetAnnual: spendable,
             spendableNetMonthly: Money.cents(spendable / 12),
             effectiveRate: received > 0 ? (socialSecurity + due) / received : 0,
-            marginalRate: marginalRate(on: taxable / divisor, input: input))
+            marginalRate: marginalRate(on: taxable / divisor, input: input),
+            marginalIRSRate: marginalRate(on: taxable / divisor, input: input,
+                                          includingContributions: false))
     }
 
     /// What the meal allowance actually costs in tax and contributions: this
@@ -745,7 +751,8 @@ enum TaxEngine {
         return Money.cents(total)
     }
 
-    private static func marginalRate(on income: Double, input: TaxInput) -> Double {
+    private static func marginalRate(on income: Double, input: TaxInput,
+                                     includingContributions: Bool = true) -> Double {
         let table = input.table
         let scale = table.brackets.first { income <= ($0.upperLimit ?? .greatestFiniteMagnitude) }?
             .rate ?? table.brackets.last?.rate ?? 0
@@ -754,6 +761,6 @@ enum TaxEngine {
             .last { income > $0.floor }?.rate ?? 0
         return scale * (1 - table.reduction(for: input.region))
             + solidarity
-            + table.socialSecurityRate
+            + (includingContributions ? table.socialSecurityRate : 0)
     }
 }

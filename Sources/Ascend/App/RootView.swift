@@ -138,6 +138,7 @@ struct RootView: View {
             case .investments: InvestmentsView()
             case .expenses: ExpensesView()
             case .tax: TaxView()
+            case .sideHustle: SideHustleView()
             case .goals: GoalsView()
             case .projections: ProjectionsView()
             case .accounts: AccountsView()

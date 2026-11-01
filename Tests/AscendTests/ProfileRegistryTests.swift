@@ -339,22 +339,25 @@ struct AppSectionAvailabilityTests {
         #expect(!AppSection.tax.isAvailable(to: .organization, in: Countries.portugal))
     }
 
-    @Test("A person elsewhere is not offered it either")
+    @Test("A person elsewhere is not offered them either")
     func abroadHasNoTax() {
         for country in ["ES", "FR", "BR", "US", ""] {
-            #expect(!sections(for: .person, in: country).contains(.tax),
-                    "tax offered in \(country)")
-            #expect(!AppSection.tax.isAvailable(to: .person, in: country))
+            for section in [AppSection.tax, .sideHustle] {
+                #expect(!sections(for: .person, in: country).contains(section),
+                        "\(section.title) offered in \(country)")
+                #expect(!section.isAvailable(to: .person, in: country))
+            }
         }
     }
 
-    @Test("Only tax is withheld — every other screen is offered to both")
+    @Test("Only the Portuguese tax screens are withheld")
     func nothingElseIsHidden() {
+        let portugueseOnly: Set<AppSection> = [.tax, .sideHustle]
         let hidden = Set(sections(for: .person)).subtracting(sections(for: .organization))
-        #expect(hidden == [.tax])
-        // And withholding it is all that moving country does.
+        #expect(hidden == portugueseOnly)
+        // And withholding them is all that moving country does.
         #expect(Set(sections(for: .person)).subtracting(sections(for: .person, in: "ES"))
-                == [.tax])
+                == portugueseOnly)
     }
 
     @Test("Groups keep their order and none is left empty")

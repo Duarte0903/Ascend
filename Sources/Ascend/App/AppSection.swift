@@ -3,29 +3,28 @@ import Foundation
 /// Sidebar destinations. Named `AppSection` rather than `Section` so it never
 /// collides with SwiftUI's own `Section` inside view bodies.
 enum AppSection: String, CaseIterable, Identifiable {
-    case dashboard, balances, trends, allocation, investments, expenses, tax, goals, projections,
-         accounts, profile
+    case dashboard, balances, trends, allocation, investments, expenses, tax, sideHustle,
+         goals, projections, accounts, profile
 
     var id: String { rawValue }
 
     /// Sidebar groupings, in order, before anything is filtered out.
     private static let allGroups: [(label: String, items: [AppSection])] = [
         ("Overview", [.dashboard, .balances, .trends, .allocation, .investments]),
-        ("Planning", [.expenses, .tax, .goals, .projections]),
+        ("Planning", [.expenses, .tax, .sideHustle, .goals, .projections]),
         ("Setup", [.accounts, .profile]),
     ]
 
     /// Whether this screen makes sense for the profile that is open.
     ///
-    /// Tax estimates personal income tax on a salary, which an organisation
-    /// does not have — companies are assessed under an entirely different
-    /// regime, so showing them a salary calculator would be worse than showing
-    /// them nothing. It also models the Portuguese system and only that, so it
-    /// is offered to a person in Portugal and nobody else. Everything else is
+    /// Tax and Side hustles both estimate personal Portuguese tax, which an
+    /// organisation does not pay — companies are assessed under an entirely
+    /// different regime — and which means nothing outside Portugal. Both are
+    /// offered to a person in Portugal and nobody else. Everything else is
     /// universal: balances and forecasts do not care where you live.
     func isAvailable(to kind: ProfileKind, in countryCode: String) -> Bool {
         switch self {
-        case .tax: kind == .person && countryCode == Countries.portugal
+        case .tax, .sideHustle: kind == .person && countryCode == Countries.portugal
         default: true
         }
     }
@@ -49,6 +48,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .investments: "Investments"
         case .expenses: "Expenses"
         case .tax: "Tax"
+        case .sideHustle: "Side hustles"
         case .goals: "Goals"
         case .projections: "Projections"
         case .accounts: "Accounts"
@@ -65,6 +65,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .investments: "chart.line.uptrend.xyaxis.circle"
         case .expenses: "creditcard"
         case .tax: "percent"
+        case .sideHustle: "briefcase"
         case .goals: "target"
         case .projections: "chart.line.uptrend.xyaxis"
         case .accounts: "building.columns"
@@ -81,6 +82,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .investments: "What your savings and investments are worth"
         case .expenses: "What every month costs you"
         case .tax: "What the year costs, and what is left"
+        case .sideHustle: "What work on the side earns, and owes"
         case .goals: "Set a target and track progress"
         case .projections: "Forecast from your assumptions"
         case .accounts: "Create, edit and archive your accounts"

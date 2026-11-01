@@ -32,6 +32,18 @@ struct BackupFile: Codable {
     struct ExpenseCategoryDTO: Codable {
         var id: UUID, name: String, colorHex: String, sortOrder: Int
     }
+    struct SideHustleDTO: Codable {
+        var id: UUID, name: String, note: String, colorHex: String
+        var activity: String, contributions: String
+        var monthsActive: Int, isArchived: Bool, sortOrder: Int
+        var earnings: [EarningDTO]
+    }
+    struct EarningDTO: Codable {
+        var id: UUID, date: Date, amount: Double, note: String
+        /// Absent in the first files that carried side hustles, where every
+        /// earning was money already received.
+        var isPaid: Bool?
+    }
     struct SettingsDTO: Codable {
         var targetNetWorth: Double, monthlyNetIncome: Double
         var maxMonthlyExpenses: Double, projectionHorizonMonths: Int
@@ -45,6 +57,8 @@ struct BackupFile: Codable {
     /// Added with the Expenses screen; absent in older files.
     var expenses: [ExpenseDTO]?
     var expenseCategories: [ExpenseCategoryDTO]?
+    /// Added with the Side hustles screen; absent in older files.
+    var sideHustles: [SideHustleDTO]?
 }
 
 enum BackupService {
@@ -52,7 +66,8 @@ enum BackupService {
                        settings: AppSettings,
                        categories: [AccountCategory] = [],
                        expenses: [Expense] = [],
-                       expenseCategories: [ExpenseCategory] = []) throws -> Data {
+                       expenseCategories: [ExpenseCategory] = [],
+                       sideHustles: [SideHustle] = []) throws -> Data {
         let file = BackupFile(
             accounts: accounts.map {
                 .init(id: $0.id, name: $0.name, kind: $0.kindRaw, colorHex: $0.colorHex,
@@ -92,6 +107,18 @@ enum BackupService {
             },
             expenseCategories: expenseCategories.map {
                 .init(id: $0.id, name: $0.name, colorHex: $0.colorHex, sortOrder: $0.sortOrder)
+            },
+            sideHustles: sideHustles.map { hustle in
+                .init(id: hustle.id, name: hustle.name, note: hustle.note,
+                      colorHex: hustle.colorHex,
+                      activity: hustle.activityRaw,
+                      contributions: hustle.contributionsRaw,
+                      monthsActive: hustle.monthsActive,
+                      isArchived: hustle.isArchived, sortOrder: hustle.sortOrder,
+                      earnings: (hustle.earnings ?? []).map {
+                          .init(id: $0.id, date: $0.date, amount: $0.amount,
+                                note: $0.note, isPaid: $0.isPaid)
+                      })
             })
 
         let encoder = JSONEncoder()
@@ -123,6 +150,14 @@ enum BackupService {
         }
         for category in (try? context.fetch(FetchDescriptor<ExpenseCategory>())) ?? [] {
             context.delete(category)
+        }
+        // Earnings go with their hustle, but the sweep is explicit: a restore
+        // must not leave money behind from the profile being replaced.
+        for hustle in (try? context.fetch(FetchDescriptor<SideHustle>())) ?? [] {
+            context.delete(hustle)
+        }
+        for earning in (try? context.fetch(FetchDescriptor<SideHustleEarning>())) ?? [] {
+            context.delete(earning)
         }
 
         // Version 1 files carry no categories; seed the defaults so their
@@ -186,6 +221,25 @@ enum BackupService {
                                    frequency: ExpenseFrequency(rawValue: dto.frequency) ?? .monthly,
                                    categoryID: dto.categoryID, accountID: dto.accountID,
                                    isActive: dto.isActive, sortOrder: dto.sortOrder))
+        }
+
+        for dto in file.sideHustles ?? [] {
+            let hustle = SideHustle(
+                id: dto.id, name: dto.name, note: dto.note, colorHex: dto.colorHex,
+                activity: SideHustleActivity(rawValue: dto.activity) ?? .professionalServices,
+                contributions: SideHustleContributions(rawValue: dto.contributions) ?? .automatic,
+                monthsActive: dto.monthsActive, isArchived: dto.isArchived,
+                sortOrder: dto.sortOrder)
+            context.insert(hustle)
+            hustle.earnings = dto.earnings.map { earning in
+                let stored = SideHustleEarning(id: earning.id, date: earning.date,
+                                               amount: earning.amount,
+                                               note: earning.note,
+                                               isPaid: earning.isPaid ?? true,
+                                               hustle: hustle)
+                context.insert(stored)
+                return stored
+            }
         }
 
         context.insert(AppSettings(

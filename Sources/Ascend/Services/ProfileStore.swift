@@ -45,7 +45,8 @@ final class ProfileStore {
     static let schema = Schema([Account.self, AccountCategory.self, Bank.self,
                                 BalanceRecord.self,
                                 BalanceEntry.self, AppSettings.self, Expense.self,
-                                ExpenseCategory.self])
+                                ExpenseCategory.self,
+                                SideHustle.self, SideHustleEarning.self])
 
     /// `root` exists for tests and the dev preview: pass a directory and the
     /// store keeps entirely to itself, adopting no legacy store. Tests also
@@ -319,7 +320,8 @@ final class ProfileStore {
             settings: SeedData.settings(in: context),
             categories: (try? context.fetch(FetchDescriptor<AccountCategory>())) ?? [],
             expenses: (try? context.fetch(FetchDescriptor<Expense>())) ?? [],
-            expenseCategories: (try? context.fetch(FetchDescriptor<ExpenseCategory>())) ?? [])
+            expenseCategories: (try? context.fetch(FetchDescriptor<ExpenseCategory>())) ?? [],
+            sideHustles: (try? context.fetch(FetchDescriptor<SideHustle>())) ?? [])
     }
 
     func restoreIntoActive(_ data: Data) {
