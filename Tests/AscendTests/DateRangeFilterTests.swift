@@ -158,3 +158,54 @@ struct YearRangeTests {
         #expect(calendar.component(.year, from: kept[0].date) == 2025)
     }
 }
+
+/// A one-month window, for a screen that has filled up with records.
+@Suite("Last month")
+struct OneMonthRangeTests {
+    private let calendar = Calendar(identifier: .gregorian)
+    private func day(_ d: Int, _ m: Int, _ y: Int) -> Date {
+        calendar.date(from: DateComponents(year: y, month: m, day: d, hour: 12))!
+    }
+
+    @Test("It reaches back exactly one month and no further")
+    func window() {
+        let now = day(15, 6, 2026)
+        let range = DateRangeFilter.month1
+        #expect(range.startDate(now: now, calendar: calendar) == day(15, 5, 2026))
+        #expect(range.contains(day(20, 5, 2026), now: now, calendar: calendar))
+        #expect(range.contains(now, now: now, calendar: calendar))
+        #expect(!range.contains(day(14, 5, 2026), now: now, calendar: calendar))
+    }
+
+    @Test("It is tighter than three months, and has no ceiling")
+    func tighterThanThree() {
+        let now = day(15, 6, 2026)
+        #expect(!DateRangeFilter.month1.contains(day(1, 4, 2026), now: now,
+                                                 calendar: calendar))
+        #expect(DateRangeFilter.months3.contains(day(1, 4, 2026), now: now,
+                                                 calendar: calendar))
+        #expect(DateRangeFilter.month1.endDate(calendar: calendar) == nil)
+    }
+
+    @Test("It is offered in the menu, between all time and three months")
+    func listedFirst() {
+        #expect(DateRangeFilter.standardCases.contains(.month1))
+        let order = DateRangeFilter.standardCases.map(\.rawValue)
+        #expect(order == ["all", "month1", "months3", "months6", "months12", "yearToDate"])
+    }
+
+    @Test("A stored preference survives, and the older ones still resolve")
+    func roundTrips() {
+        #expect(DateRangeFilter(rawValue: "month1") == .month1)
+        #expect(DateRangeFilter.month1.rawValue == "month1")
+        for existing in ["all", "months3", "months6", "months12", "yearToDate", "year2026"] {
+            #expect(DateRangeFilter(rawValue: existing) != nil, "\(existing)")
+        }
+    }
+
+    @Test("It is labelled for both the menu and the toolbar")
+    func labels() {
+        #expect(DateRangeFilter.month1.label == "Last month")
+        #expect(DateRangeFilter.month1.shortLabel == "1M")
+    }
+}

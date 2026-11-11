@@ -4,7 +4,7 @@ import Foundation
 /// collides with SwiftUI's own `Section` inside view bodies.
 enum AppSection: String, CaseIterable, Identifiable {
     case dashboard, balances, trends, allocation, investments, expenses, tax, sideHustle,
-         goals, projections, accounts, profile
+         goals, projections, accounts, profile, settings
 
     var id: String { rawValue }
 
@@ -12,7 +12,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     private static let allGroups: [(label: String, items: [AppSection])] = [
         ("Overview", [.dashboard, .balances, .trends, .allocation, .investments]),
         ("Planning", [.expenses, .tax, .sideHustle, .goals, .projections]),
-        ("Setup", [.accounts, .profile]),
+        ("Setup", [.accounts, .profile, .settings]),
     ]
 
     /// Whether this screen makes sense for the profile that is open.
@@ -29,12 +29,40 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether this screen may be hidden from the sidebar.
+    ///
+    /// Settings cannot: hiding it would take away the only way of bringing
+    /// anything back. Dashboard cannot either, because it is where every
+    /// screen falls back to when its own becomes unavailable.
+    var canBeHidden: Bool {
+        switch self {
+        case .settings, .dashboard: false
+        default: true
+        }
+    }
+
     /// The sidebar for a given kind of profile. A group that loses all of its
     /// items disappears rather than leaving an empty heading.
-    static func groups(for kind: ProfileKind,
-                       in countryCode: String) -> [(label: String, items: [AppSection])] {
+    static func groups(for kind: ProfileKind, in countryCode: String,
+                       hiding hidden: Set<AppSection> = [])
+        -> [(label: String, items: [AppSection])] {
         allGroups.compactMap { group in
-            let items = group.items.filter { $0.isAvailable(to: kind, in: countryCode) }
+            let items = group.items.filter {
+                $0.isAvailable(to: kind, in: countryCode)
+                    && !($0.canBeHidden && hidden.contains($0))
+            }
+            return items.isEmpty ? nil : (label: group.label, items: items)
+        }
+    }
+
+    /// Everything the profile could show, hidden or not — what the Settings
+    /// screen lists, grouped as the sidebar groups it.
+    static func hideableGroups(for kind: ProfileKind, in countryCode: String)
+        -> [(label: String, items: [AppSection])] {
+        allGroups.compactMap { group in
+            let items = group.items.filter {
+                $0.isAvailable(to: kind, in: countryCode) && $0.canBeHidden
+            }
             return items.isEmpty ? nil : (label: group.label, items: items)
         }
     }
@@ -53,6 +81,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .projections: "Projections"
         case .accounts: "Accounts"
         case .profile: "Profile"
+        case .settings: "Settings"
         }
     }
 
@@ -70,6 +99,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .projections: "chart.line.uptrend.xyaxis"
         case .accounts: "building.columns"
         case .profile: "person.crop.circle"
+        case .settings: "gearshape"
         }
     }
 
@@ -87,6 +117,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .projections: "Forecast from your assumptions"
         case .accounts: "Create, edit and archive your accounts"
         case .profile: "Whose books these are, and how they look"
+        case .settings: "Which screens you see, and how the app behaves"
         }
     }
 }

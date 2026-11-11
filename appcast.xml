@@ -5,6 +5,18 @@
     <link>https://github.com/Duarte0903/Ascend</link>
     <description>Ascend releases</description>
     <item>
+      <title>1.4</title>
+      <pubDate>Wed, 11 Nov 2026 12:26:49 +0000</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>1.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[New Settings screen: hide any screen you do not use from the sidebar, with Appearance and Currency moved in alongside. Balances is much faster — a render went from about 9 ms to a fraction of one — and the period filter gains a Last month option.]]></description>
+      <enclosure url="https://github.com/Duarte0903/Ascend/releases/download/v1.4/Ascend-1.4.zip"
+                 length="6041827"
+                 type="application/octet-stream"
+                 sparkle:edSignature="z4hpeeYhaxBVlMR/pWfFF3UwI0oyt4x64+6MsvihLyhWrVMxM4IXiNGsnlcMHvYXI2aOM6nN2qaSxvWXh0n/AA=="/>
+    </item>
+    <item>
       <title>1.3</title>
       <pubDate>Sun, 01 Nov 2026 00:06:49 +0000</pubDate>
       <sparkle:version>4</sparkle:version>

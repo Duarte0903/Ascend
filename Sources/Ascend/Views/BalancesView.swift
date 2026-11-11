@@ -15,8 +15,6 @@ struct BalancesView: View {
         storedSettings.first ?? SeedData.settings(in: context)
     }
 
-    @State private var hoveredRow: UUID?
-
     private var activeAccounts: [Account] { accounts.filter { !$0.isArchived } }
 
     @AppStorage("dateRange") private var rangeRaw = DateRangeFilter.all.rawValue
@@ -32,8 +30,10 @@ struct BalancesView: View {
     }
 
     /// Years with records in them, so the filter never offers an empty one.
+    /// Taken from the dates themselves: deriving a whole ledger to read the
+    /// years off it was work for nothing.
     private var availableYears: [Int] {
-        DateRangeFilter.years(in: allDerived.map(\.date))
+        DateRangeFilter.years(in: records.map(\.date))
     }
 
     private var allDerived: [DerivedRecord] {
@@ -52,10 +52,15 @@ struct BalancesView: View {
                                        systemImage: "tablecells",
                                        description: Text("Add your first record to start tracking."))
                     .frame(height: 300)
-            } else if derived.isEmpty {
-                NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
             } else {
-                table
+                // Derived once per pass and handed down. Every mention of it
+                // used to rebuild the ledger from scratch.
+                let rows = derived
+                if rows.isEmpty {
+                    NoResultsInRange(range: range) { rangeRaw = DateRangeFilter.all.rawValue }
+                } else {
+                    table(rows)
+                }
             }
         }
         .toolbar {
@@ -76,14 +81,24 @@ struct BalancesView: View {
     /// painted that way stops at every cell boundary and a hover handler fires
     /// an exit each time the pointer crosses one. Every column here has an
     /// explicit width, so Grid was doing no alignment work worth that cost.
-    private var table: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
+    private func table(_ rows: [DerivedRecord]) -> some View {
+        // Measured once, not once per cell: it depends on the account names
+        // and nothing else, and measuring text is the most expensive thing
+        // this screen does.
+        let width = accountColumnWidth
+        let columns = activeAccounts
+        // One pass instead of a linear scan per row.
+        let byID = Dictionary(records.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                headerRow
+                headerRow(columns, width: width)
                 Divider()
-                ForEach(Array(derived.enumerated()), id: \.element.id) { index, row in
-                    rowView(row)
-                    if index < derived.count - 1 { Divider().opacity(0.6) }
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if let record = byID[row.id] {
+                        BalanceRow(row: row, record: record, columns: columns,
+                                   columnWidth: width)
+                    }
+                    if index < rows.count - 1 { Divider().opacity(0.6) }
                 }
             }
             .padding(Theme.cardPadding)
@@ -93,9 +108,6 @@ struct BalancesView: View {
         // This one scrolls sideways only; its height is whatever the rows need.
         .fixedSize(horizontal: false, vertical: true)
         .ftCard(padding: 0)
-        // The pointer leaving the table is the only thing that clears the
-        // highlight; moving between cells never does.
-        .onHover { if !$0 { hoveredRow = nil } }
     }
 
     /// Account columns are as wide as the longest account name needs, so names
@@ -118,10 +130,10 @@ struct BalancesView: View {
         return min(max(Theme.Size.field, needed), 260)
     }
 
-    private var headerRow: some View {
+    private func headerRow(_ columns: [Account], width accountColumnWidth: CGFloat) -> some View {
         HStack(spacing: 14) {
             Text("Date").frame(width: Theme.Size.field, alignment: .leading)
-            ForEach(activeAccounts) { account in
+            ForEach(columns) { account in
                 HStack(spacing: 6) {
                     AccountIcon(account, size: Theme.Size.iconInline)
                     Text(account.name).lineLimit(1)
@@ -147,70 +159,6 @@ struct BalancesView: View {
         .padding(.bottom, 8)
     }
 
-    @ViewBuilder
-    private func rowView(_ row: DerivedRecord) -> some View {
-        if let record = records.first(where: { $0.id == row.id }) {
-            HStack(spacing: 14) {
-                DatePicker("", selection: Binding(
-                    get: { record.date },
-                    set: { record.date = $0; try? context.save() }),
-                    displayedComponents: .date)
-                    .labelsHidden()
-                        .environment(\.locale, Dates.pickerLocale)
-                    .datePickerStyle(.field)
-                    .frame(width: Theme.Size.field)
-
-                ForEach(activeAccounts) { account in
-                    MoneyField(value: Binding(
-                        get: { record.amount(for: account.id) },
-                        set: { record.setAmount($0, for: account.id); try? context.save() }),
-                        width: accountColumnWidth)
-                }
-
-                DerivedText(text: Money.currency(row.total), width: Theme.Size.field,
-                            emphasis: true)
-                DerivedText(text: Money.currency(row.usable), width: Theme.Size.field)
-                DerivedText(text: signed(row.changeAmount), width: Theme.Size.field,
-                            tint: tint(for: row.changeAmount))
-                DerivedText(text: signed(row.changePercent, percent: true),
-                            width: Theme.Size.fieldSmall,
-                            tint: tint(for: row.changePercent))
-                DerivedText(text: Money.percent(row.savingsRate), width: Theme.Size.fieldSmall,
-                            tint: (row.savingsRate ?? 0) > 0 ? .ftPositive : nil)
-
-                Button {
-                    context.delete(record)
-                    try? context.save()
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11))
-                        .foregroundStyle(hoveredRow == row.id ? Color.ftNegative : Color.ftInkTertiary.opacity(0.5))
-                }
-                .buttonStyle(.plain)
-                .help("Delete this record")
-                .frame(width: Theme.Size.iconButton)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 5)
-            .padding(.horizontal, 6)
-            .background(hoveredRow == row.id ? Color.ftSurfaceAlt : .clear,
-                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .contentShape(Rectangle())
-            .onHover { if $0 { hoveredRow = row.id } }
-        }
-    }
-
-    private func signed(_ value: Double?, percent: Bool = false) -> String {
-        guard let value else { return Money.dash }
-        let text = percent ? Money.percent(value) : Money.currency(value)
-        return value > 0 ? "+" + text : text
-    }
-
-    private func tint(for value: Double?) -> Color? {
-        guard let value, value != 0 else { return nil }
-        return value > 0 ? .ftPositive : .ftNegative
-    }
 
     private func addRecord() {
         let record = BalanceRecord(date: Date())
@@ -228,5 +176,84 @@ struct BalancesView: View {
             record.setAmount(last.amount(for: account.id), for: account.id)
         }
         try? context.save()
+    }
+}
+
+/// One row of the table, as its own view.
+///
+/// Hovering used to be state on the whole screen, so moving the pointer
+/// across the table rebuilt every row — each with its own date picker and a
+/// money field per account. Owning the highlight here means only the row
+/// under the pointer is redrawn.
+private struct BalanceRow: View {
+    @Environment(\.modelContext) private var context
+    let row: DerivedRecord
+    let record: BalanceRecord
+    let columns: [Account]
+    let columnWidth: CGFloat
+
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            DatePicker("", selection: Binding(
+                get: { record.date },
+                set: { record.date = $0; try? context.save() }),
+                displayedComponents: .date)
+                .labelsHidden()
+                .environment(\.locale, Dates.pickerLocale)
+                .datePickerStyle(.field)
+                .frame(width: Theme.Size.field)
+
+            ForEach(columns) { account in
+                MoneyField(value: Binding(
+                    get: { record.amount(for: account.id) },
+                    set: { record.setAmount($0, for: account.id); try? context.save() }),
+                    width: columnWidth)
+            }
+
+            DerivedText(text: Money.currency(row.total), width: Theme.Size.field,
+                        emphasis: true)
+            DerivedText(text: Money.currency(row.usable), width: Theme.Size.field)
+            DerivedText(text: signed(row.changeAmount), width: Theme.Size.field,
+                        tint: tint(for: row.changeAmount))
+            DerivedText(text: signed(row.changePercent, percent: true),
+                        width: Theme.Size.fieldSmall,
+                        tint: tint(for: row.changePercent))
+            DerivedText(text: Money.percent(row.savingsRate), width: Theme.Size.fieldSmall,
+                        tint: (row.savingsRate ?? 0) > 0 ? .ftPositive : nil)
+
+            Button {
+                context.delete(record)
+                try? context.save()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11))
+                    .foregroundStyle(hovering ? Color.ftNegative
+                                              : Color.ftInkTertiary.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+            .help("Delete this record")
+            .frame(width: Theme.Size.iconButton)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 6)
+        .background(hovering ? Color.ftSurfaceAlt : .clear,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
+
+    private func signed(_ value: Double?, percent: Bool = false) -> String {
+        guard let value else { return Money.dash }
+        let text = percent ? Money.percent(value) : Money.currency(value)
+        return value > 0 ? "+" + text : text
+    }
+
+    private func tint(for value: Double?) -> Color? {
+        guard let value, value != 0 else { return nil }
+        return value > 0 ? .ftPositive : .ftNegative
     }
 }

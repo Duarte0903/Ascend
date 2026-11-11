@@ -13,9 +13,18 @@ struct RootView: View {
     @State private var showingNewProfile = false
     @State private var showingProfileManager = false
     @AppStorage("appearance") private var appearanceRaw = AppearanceSetting.system.rawValue
+    @AppStorage(HiddenSections.key) private var hiddenRaw = ""
 
     private var profileKind: ProfileKind { profiles.registry.active.kind }
     private var profileCountry: String { profiles.registry.active.countryCode }
+    private var hidden: Set<AppSection> { HiddenSections.decode(hiddenRaw) }
+
+    /// A screen has to be both available to this profile and not hidden,
+    /// or it must not be reachable by any route.
+    private func isShown(_ section: AppSection) -> Bool {
+        section.isAvailable(to: profileKind, in: profileCountry)
+            && !(section.canBeHidden && hidden.contains(section))
+    }
 
     private var appearance: Binding<AppearanceSetting> {
         Binding(get: { AppearanceSetting(rawValue: appearanceRaw) ?? .system },
@@ -61,7 +70,8 @@ struct RootView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
-            ForEach(AppSection.groups(for: profileKind, in: profileCountry), id: \.label) { group in
+            ForEach(AppSection.groups(for: profileKind, in: profileCountry, hiding: hidden),
+                    id: \.label) { group in
                 SwiftUI.Section {
                     ForEach(group.items) { section in
                         Label {
@@ -117,20 +127,16 @@ struct RootView: View {
 
         .onAppear { appearance.wrappedValue.apply() }
         // A section can fall away when either changes, so both are watched.
-        .onChange(of: profileKind) { _, kind in
-            if !selection.isAvailable(to: kind, in: profileCountry) { selection = .dashboard }
-        }
-        .onChange(of: profileCountry) { _, country in
-            if !selection.isAvailable(to: profileKind, in: country) { selection = .dashboard }
-        }
+        .onChange(of: profileKind) { if !isShown(selection) { selection = .dashboard } }
+        .onChange(of: profileCountry) { if !isShown(selection) { selection = .dashboard } }
+        .onChange(of: hiddenRaw) { if !isShown(selection) { selection = .dashboard } }
     }
 
     private var detail: some View {
         Group {
             // Falls back rather than trusting the selection: a screen that is
             // not in the sidebar must not be reachable by any route.
-            switch selection.isAvailable(to: profileKind, in: profileCountry)
-            ? selection : .dashboard {
+            switch isShown(selection) ? selection : .dashboard {
             case .dashboard: DashboardView()
             case .balances: BalancesView()
             case .trends: TrendsView()
@@ -143,6 +149,7 @@ struct RootView: View {
             case .projections: ProjectionsView()
             case .accounts: AccountsView()
             case .profile: ProfileView()
+            case .settings: SettingsView()
             }
         }
         .background(Color.ftCanvas)

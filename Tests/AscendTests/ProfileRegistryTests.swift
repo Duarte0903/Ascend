@@ -427,3 +427,71 @@ struct ProfileCountryTests {
         #expect(!Countries.all.contains("QQ"))
     }
 }
+
+/// Screens can be taken out of the sidebar, but never the two that would
+/// strand you: Settings is the only way back, and Dashboard is where every
+/// screen falls back to.
+@Suite("Hiding screens")
+struct HiddenSectionsTests {
+    @Test("A hidden screen leaves the sidebar")
+    func hidingRemovesIt() {
+        let shown = AppSection.groups(for: .person, in: Countries.portugal,
+                                      hiding: [.goals]).flatMap(\.items)
+        #expect(!shown.contains(.goals))
+        #expect(shown.contains(.projections))
+    }
+
+    @Test("Settings and Dashboard cannot be hidden, whatever is asked")
+    func theTwoThatStay() {
+        #expect(!AppSection.settings.canBeHidden)
+        #expect(!AppSection.dashboard.canBeHidden)
+        let shown = AppSection.groups(for: .person, in: Countries.portugal,
+                                      hiding: [.settings, .dashboard]).flatMap(\.items)
+        #expect(shown.contains(.settings))
+        #expect(shown.contains(.dashboard))
+    }
+
+    @Test("A group that loses every item disappears rather than sitting empty")
+    func emptyGroupGoes() {
+        let planning = AppSection.groups(for: .person, in: Countries.portugal)
+            .first { $0.label == "Planning" }
+        let hidden = Set(planning?.items ?? [])
+        let labels = AppSection.groups(for: .person, in: Countries.portugal,
+                                       hiding: hidden).map(\.label)
+        #expect(!labels.contains("Planning"))
+        #expect(labels == ["Overview", "Setup"])
+    }
+
+    @Test("The stored string survives a round trip and is stable")
+    func codec() {
+        let set: Set<AppSection> = [.goals, .expenses, .trends]
+        let raw = HiddenSections.encode(set)
+        #expect(HiddenSections.decode(raw) == set)
+        // Sorted, so the stored value does not churn between launches.
+        #expect(raw == HiddenSections.encode(set))
+        #expect(raw == "expenses,goals,trends")
+    }
+
+    @Test("Nonsense in the stored string is dropped, not crashed on")
+    func tolerantDecoding() {
+        #expect(HiddenSections.decode("") == [])
+        #expect(HiddenSections.decode("goals,notAScreen,,trends") == [.goals, .trends])
+        // A screen that cannot be hidden is not hidden, whatever is stored.
+        #expect(HiddenSections.decode("settings,dashboard,goals") == [.goals])
+        #expect(HiddenSections.encode([.settings, .goals]) == "goals")
+    }
+
+    @Test("Settings only offers what this profile could show anyway")
+    func settingsListsTheRightThings() {
+        let personal = AppSection.hideableGroups(for: .person, in: Countries.portugal)
+            .flatMap(\.items)
+        #expect(personal.contains(.tax))
+        #expect(!personal.contains(.settings))
+        #expect(!personal.contains(.dashboard))
+
+        let company = AppSection.hideableGroups(for: .organization,
+                                                in: Countries.portugal).flatMap(\.items)
+        #expect(!company.contains(.tax))
+        #expect(!company.contains(.sideHustle))
+    }
+}

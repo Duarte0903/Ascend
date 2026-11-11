@@ -34,14 +34,10 @@ struct ProfileView: View {
         FillingScreen {
             identity
             statistics
-            // Fixed vertically so the row is only as tall as the taller card:
-            // both stretch to match it, without also swallowing the leftover
-            // height of the screen.
-            HStack(alignment: .top, spacing: Theme.gap) {
-                appearance
-                preferences
-            }
-            .fixedSize(horizontal: false, vertical: true)
+            // Fixed vertically so the card is only as tall as it needs,
+            // without swallowing the leftover height of the screen.
+            appearance
+                .fixedSize(horizontal: false, vertical: true)
             details.fillsHeight(minimum: 260)
         }
         .alert("Couldn't do that",
@@ -304,7 +300,7 @@ struct ProfileView: View {
             .date(byAdding: .year, value: -30, to: Date()) ?? Date()
     }
 
-    // MARK: - Appearance and preferences
+    // MARK: - Appearance
 
     private var appearance: some View {
         CardSection("Appearance",
@@ -319,44 +315,6 @@ struct ProfileView: View {
                 kind: active.kind)
         }
         .fillingHeight()
-    }
-
-    private var preferences: some View {
-        CardSection("Preferences", subtitle: "How money is shown in this profile") {
-            VStack(alignment: .leading, spacing: 6) {
-                Eyebrow("Currency")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 6,
-                                             alignment: .leading)],
-                          alignment: .leading, spacing: 6) {
-                    ForEach(Money.commonSymbols, id: \.self) { option in
-                        currencyChip(option)
-                    }
-                }
-                Text("Every figure in this profile is shown with this symbol.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.ftInkTertiary)
-            }
-        }
-        .fillingHeight()
-    }
-
-    private func currencyChip(_ option: String) -> some View {
-        let isSelected = active.currencySymbol == option
-        return Button {
-            profiles.update(active.id) { $0.currencySymbol = option }
-        } label: {
-            Text(option)
-                .font(.system(size: 11.5, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(isSelected ? Color.white : Color.ftInkSecondary)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .frame(maxWidth: .infinity)
-                .background(isSelected ? Color.ftAccent : Color.ftSurfaceAlt, in: Capsule())
-                .overlay(Capsule().strokeBorder(isSelected ? .clear : Color.ftHairline,
-                                                lineWidth: 1))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Statistics

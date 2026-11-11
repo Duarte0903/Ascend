@@ -7,13 +7,13 @@ import Foundation
 /// predecessor falls outside the window. Only the aggregate figures are
 /// recomputed over what's visible.
 enum DateRangeFilter: Hashable, Identifiable, Sendable {
-    case all, months3, months6, months12, yearToDate
+    case all, month1, months3, months6, months12, yearToDate
     /// One whole calendar year, bounded at both ends — unlike every other case,
     /// which only has a floor.
     case year(Int)
 
     /// The fixed windows, for a menu that then lists whichever years exist.
-    static let standardCases: [DateRangeFilter] = [.all, .months3, .months6,
+    static let standardCases: [DateRangeFilter] = [.all, .month1, .months3, .months6,
                                                    .months12, .yearToDate]
 
     var id: String { rawValue }
@@ -24,6 +24,7 @@ enum DateRangeFilter: Hashable, Identifiable, Sendable {
     var rawValue: String {
         switch self {
         case .all: "all"
+        case .month1: "month1"
         case .months3: "months3"
         case .months6: "months6"
         case .months12: "months12"
@@ -35,6 +36,7 @@ enum DateRangeFilter: Hashable, Identifiable, Sendable {
     init?(rawValue: String) {
         switch rawValue {
         case "all": self = .all
+        case "month1": self = .month1
         case "months3": self = .months3
         case "months6": self = .months6
         case "months12": self = .months12
@@ -55,6 +57,7 @@ enum DateRangeFilter: Hashable, Identifiable, Sendable {
     var label: String {
         switch self {
         case .all: "All time"
+        case .month1: "Last month"
         case .months3: "Last 3 months"
         case .months6: "Last 6 months"
         case .months12: "Last 12 months"
@@ -67,6 +70,7 @@ enum DateRangeFilter: Hashable, Identifiable, Sendable {
     var shortLabel: String {
         switch self {
         case .all: "All"
+        case .month1: "1M"
         case .months3: "3M"
         case .months6: "6M"
         case .months12: "12M"
@@ -80,6 +84,8 @@ enum DateRangeFilter: Hashable, Identifiable, Sendable {
         switch self {
         case .all:
             nil
+        case .month1:
+            calendar.date(byAdding: .month, value: -1, to: now)
         case .months3:
             calendar.date(byAdding: .month, value: -3, to: now)
         case .months6:
